@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Precios Mínimos (PTR)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#14171C; --surface:#1B1F26; --surface-2:#20252D; --border:#2C323C;
+    --text:#EDEFF2; --text-dim:#9AA2AE; --text-faint:#666E7A;
+    --copper:#C8763A; --copper-soft:rgba(200,118,58,.16);
+    --green:#4E9A6B; --green-soft:rgba(78,154,107,.14);
+    --red:#C15B5B; --red-soft:rgba(193,91,91,.14);
+    --mono:'DM Mono','SF Mono',Consolas,monospace;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14.5px;line-height:1.45;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{margin:0;font-family:'Space Grotesk','Inter',sans-serif;font-weight:600;}
+  input,select,button,textarea{font-family:inherit;}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px;}
+  .topbar{border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:10px;}
+  .topbar .mark{width:26px;height:26px;border-radius:6px;background:linear-gradient(155deg,var(--copper),#8f5023);display:inline-flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;color:#1a1208;flex:none;}
+  .topbar h1{font-size:15.5px;}
+  .topbar .sub{font-size:11.5px;color:var(--text-faint);margin-top:1px;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+  .card-title{font-size:12.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:4px;}
+  .card-sub{font-size:12.5px;color:var(--text-faint);margin-bottom:14px;}
+  .step-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--copper-soft);color:var(--copper);font-size:11px;font-weight:700;margin-right:8px;}
+
+  .dropzone{border:1.5px dashed var(--border);border-radius:8px;padding:22px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;}
+  .dropzone:hover, .dropzone.drag{border-color:var(--copper);background:var(--copper-soft);}
+  .dropzone input{display:none;}
+  .dropzone .hint{font-size:12px;color:var(--text-faint);margin-top:4px;}
+  .dropzone .icon{font-size:22px;margin-bottom:6px;}
+
+  textarea.paste-area{width:100%;min-height:110px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:var(--mono);font-size:12.5px;resize:vertical;}
+  textarea.paste-area:focus{outline:none;border-color:var(--copper);}
+  .or-divider{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text-faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;}
+  .or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+  button.primary{background:var(--copper);color:#1a1208;border:none;border-radius:8px;padding:10px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  button.primary:disabled{background:#3a3f47;color:var(--text-faint);cursor:not-allowed;}
+  button.ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;font-weight:600;}
+  button.ghost:hover{border-color:var(--copper);color:var(--text);}
+  button.ghost.active{border-color:var(--copper);color:var(--copper);background:var(--copper-soft);}
+
+  .status-line{font-size:12.5px;color:var(--text-dim);margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .status-ok{color:var(--green);}
+  .status-warn{color:var(--red);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border);}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+  .kpi .num{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;}
+  .kpi .num.warn{color:var(--red);}
+  .kpi .lbl{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+
+  .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px;}
+  .field{min-width:170px;}
+  .field label{display:block;font-size:11.5px;color:var(--text-dim);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  input[type=text],input[type=search],select{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px 11px;font-size:13.5px;}
+  input:focus,select:focus{outline:none;border-color:var(--copper);}
+
+  .vendor-exclude{position:relative;}
+  .vendor-exclude-box{border:1px solid var(--border);border-radius:8px;max-height:150px;overflow-y:auto;background:var(--surface-2);padding:6px;}
+  .vendor-item{display:flex;align-items:center;gap:7px;padding:4px 6px;font-size:12.5px;border-radius:5px;cursor:pointer;}
+  .vendor-item:hover{background:var(--surface);}
+  .vendor-item input{margin:0;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.8px;}
+  th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+  th:hover{color:var(--text-dim);}
+  th .arrow{font-size:9px;margin-left:3px;opacity:.6;}
+  td{padding:8px 9px;border-bottom:1px solid var(--border);color:var(--text-dim);}
+  tr:last-child td{border-bottom:none;}
+  tr.perfora{background:rgba(193,91,91,.06);}
+  td.strong{color:var(--text);font-weight:600;}
+  td.mono,th.mono{font-family:var(--mono);}
+  .scroll-x{overflow-x:auto;max-height:560px;overflow-y:auto;}
+  .scroll-x th{position:sticky;top:0;background:var(--surface);z-index:5;box-shadow:0 1px 0 var(--border);}
+  .diff-neg{color:var(--red);font-weight:700;}
+  .diff-pos{color:var(--green);}
+  .tag-perfora{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700;background:var(--red-soft);color:var(--red);}
+  .tag-ok{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700;background:var(--green-soft);color:var(--green);}
+  .flag-si{display:inline-block;padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:var(--green-soft);color:var(--green);}
+  .flag-no{display:inline-block;padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:var(--red-soft);color:var(--red);}
+  .flag-oportunidad{background:var(--copper-soft);border:1px solid rgba(200,118,58,.4);}
+
+  .empty-state{padding:36px 20px;text-align:center;color:var(--text-faint);font-size:13px;}
+  .hint{font-size:11.5px;color:var(--text-faint);margin-top:8px;}
+  .section-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin:24px 0 10px;}
+  .section-title:first-child{margin-top:0;}
+  .warn-box{background:var(--red-soft);border:1px solid rgba(193,91,91,.35);border-radius:8px;padding:11px 13px;font-size:12.5px;margin-top:10px;}
+  .clickable-row{cursor:pointer;}
+  .clickable-row:hover{background:var(--surface-2);}
+
+  .tabs{display:flex;gap:6px;margin:22px 0 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .tab-btn{background:transparent;border:none;color:var(--text-faint);padding:10px 4px;margin-right:14px;font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;}
+  .tab-btn:hover{color:var(--text-dim);}
+  .tab-btn.active{color:var(--copper);border-bottom-color:var(--copper);}
+  .tab-panel{}
+  .dup-pair{border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--surface-2);}
+  .dup-pair .dup-head{font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;}
+  .dup-side{display:inline-block;min-width:220px;font-size:12.5px;color:var(--text-dim);vertical-align:top;margin-right:18px;}
+  .dup-side b{color:var(--text);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="mark">$</div>
+  <div>
+    <h1>Control Comercial Diario</h1>
+    <div class="sub">Perforaciones de precio · Pedidos duplicados · Ventas extraordinarias · Fuera de ruta</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">1</span>Tabla de PTR Mínimo del mes</div>
+    <div class="card-sub">Marca · Segmento · Pack · uxb · PTR Mínimo. Subí el Excel o pegá la tabla copiada de tu planilla.</div>
+    <div class="dropzone" id="dz-min">
+      <div class="icon">📄</div>
+      <div>Arrastrá el Excel acá, o hacé click para elegirlo</div>
+      <div class="hint">.xlsx o .csv</div>
+      <input type="file" id="file-min" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="or-divider">o pegá la tabla</div>
+    <textarea class="paste-area" id="paste-min" placeholder="Marca	Segmento	Pack	uxb	PTR Min
+Andes	Core	710 Lata	16	38500
+Andes	Core	Lata	24	39400
+..."></textarea>
+    <div style="margin-top:10px;"><button class="primary" id="btn-process-min">Procesar tabla de PTR</button></div>
+    <div class="status-line" id="status-min"></div>
+    <div id="min-preview"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">2</span>Base de ventas</div>
+    <div class="card-sub">El export de ventas (como "perforaciones.xlsx") con Vendedor, Cliente, Marca, Calibre, Precio Neto por bulto, etc. Se usa para Perforaciones, Ventas Extraordinarias y Fuera de Ruta.</div>
+    <div class="dropzone" id="dz-sales">
+      <div class="icon">📊</div>
+      <div>Arrastrá el Excel de ventas acá, o hacé click para elegirlo</div>
+      <div class="hint">.xlsx (puede ser un archivo grande, tarda unos segundos)</div>
+      <input type="file" id="file-sales" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="status-line" id="status-sales"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">3</span>Base de pedidos</div>
+    <div class="card-sub">El export de pedidos (columnas Cliente, Pedido, Fecha, Tipo, Vendedor, Bultos, Sub.Final, etc.). Se usa para detectar duplicados.</div>
+    <div class="dropzone" id="dz-pedidos">
+      <div class="icon">🧾</div>
+      <div>Arrastrá el Excel de pedidos acá, o hacé click para elegirlo</div>
+      <div class="hint">.xlsx o .csv</div>
+      <input type="file" id="file-pedidos" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="status-line" id="status-pedidos"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">4</span>Base de días de entrega (BEES ONE)</div>
+    <div class="card-sub">La bajada de BEES ONE (CSV con Vendor_Account_ID y columnas Mon..Sun). Se usa para Fuera de Ruta — el código de cliente se obtiene quitando el prefijo 47311200 al Vendor_Account_ID.</div>
+    <div class="dropzone" id="dz-visita">
+      <div class="icon">🗓️</div>
+      <div>Arrastrá el CSV de BEES ONE acá, o hacé click para elegirlo</div>
+      <div class="hint">.csv</div>
+      <input type="file" id="file-visita" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="status-line" id="status-visita"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">5</span>Venta acumulada del mes</div>
+    <div class="card-sub">Mismo formato que la base de ventas del Paso 2, pero con todo el mes acumulado. Se usa para saber si cada cliente ya compró Cerveza, UNG, Latón 1890, Michelob o Pure Gold en lo que va del mes.</div>
+    <div class="dropzone" id="dz-mensual">
+      <div class="icon">📅</div>
+      <div>Arrastrá el Excel del acumulado del mes acá, o hacé click para elegirlo</div>
+      <div class="hint">.xlsx (puede tardar unos segundos si es grande)</div>
+      <input type="file" id="file-mensual" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="status-line" id="status-mensual"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="step-num">6</span>Base de clientes activos (CHESS)</div>
+    <div class="card-sub">El maestro de clientes con su vendedor y ruta asignados (columnas "Cliente", "Razon social", "Fuerza de venta 1 Descripcion personal comercial", "Fuerza de venta 1 Descripcion ruta de venta"). Se usa para saber de qué vendedor es cada cliente — por ejemplo en "Tienen entrega pero no cargaron pedido".</div>
+    <div class="dropzone" id="dz-activos">
+      <div class="icon">👥</div>
+      <div>Arrastrá el Excel de clientes activos acá, o hacé click para elegirlo</div>
+      <div class="hint">.xlsx</div>
+      <input type="file" id="file-activos" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="status-line" id="status-activos"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="perforaciones" type="button">Perforaciones de Precio</button>
+    <button class="tab-btn" data-tab="duplicados" type="button">Pedidos Duplicados</button>
+    <button class="tab-btn" data-tab="extraordinarias" type="button">Ventas Extraordinarias</button>
+    <button class="tab-btn" data-tab="fuera-ruta" type="button">Fuera de Ruta</button>
+    <button class="tab-btn" data-tab="compradores-mes" type="button">Compradores del Mes</button>
+  </div>
+
+  <!-- ============== TAB: PERFORACIONES ============== -->
+  <div class="tab-panel" id="tab-perforaciones">
+    <div id="results-wrap-inner">
+      <div class="empty-state" id="perforaciones-empty">Subí la tabla de PTR Mínimo (Paso 1) y la base de ventas (Paso 2) para ver este análisis.</div>
+      <div id="results-wrap" style="display:none;">
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="num" id="kpi-total">0</div><div class="lbl">Renglones cruzados</div></div>
+          <div class="kpi"><div class="num warn" id="kpi-perfora">0</div><div class="lbl">Perforaciones</div></div>
+          <div class="kpi"><div class="num warn" id="kpi-impacto">$0</div><div class="lbl">Impacto estimado</div></div>
+          <div class="kpi"><div class="num" id="kpi-vendedores">0</div><div class="lbl">Vendedores con perforaciones</div></div>
+        </div>
+
+        <div class="section-title">Filtros</div>
+        <div class="card">
+          <div class="filters">
+            <div class="field">
+              <label>Marca</label>
+              <select id="filter-marca"><option value="">Todas</option></select>
+            </div>
+            <div class="field">
+              <label>Pack / Calibre</label>
+              <select id="filter-pack"><option value="">Todos</option></select>
+            </div>
+            <div class="field">
+              <label>Canal</label>
+              <select id="filter-canal"><option value="">Todos</option></select>
+            </div>
+            <div class="field">
+              <label>Buscar cliente</label>
+              <input type="search" id="filter-cliente" placeholder="Nombre o código">
+            </div>
+            <div class="field">
+              <label>Estado</label>
+              <select id="filter-estado">
+                <option value="">Todos</option>
+                <option value="perfora" selected>Solo perforaciones</option>
+                <option value="ok">Solo dentro de precio</option>
+              </select>
+            </div>
+            <button class="ghost" id="btn-reset-filters" type="button">Limpiar filtros</button>
+            <button class="ghost" id="btn-export-perforaciones" type="button">⬇ Exportar a Excel</button>
+          </div>
+          <div class="field" style="margin-top:6px;max-width:420px;">
+            <label>Excluir vendedores del análisis</label>
+            <div class="vendor-exclude">
+              <div class="vendor-exclude-box" id="vendor-exclude-box"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Perforaciones por vendedor</div>
+        <div class="card">
+          <div class="scroll-x" id="table-by-vendor"></div>
+          <div class="hint">Tocá un vendedor para filtrar el detalle de abajo por esa persona.</div>
+        </div>
+
+        <div class="section-title">Detalle de renglones</div>
+        <div class="card">
+          <div class="scroll-x" id="table-detail"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== TAB: PEDIDOS DUPLICADOS ============== -->
+  <div class="tab-panel" id="tab-duplicados" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>Ventana (días entre pedidos)</label>
+          <input type="text" inputmode="numeric" id="dup-dias" value="0">
+        </div>
+        <div class="field">
+          <label>Tolerancia (%) en bultos / sub. final</label>
+          <input type="text" inputmode="decimal" id="dup-tolerancia" value="5">
+        </div>
+        <button class="ghost" id="btn-refresh-dup" type="button">↻ Recalcular</button>
+        <button class="ghost" id="btn-export-dup" type="button">⬇ Exportar a Excel</button>
+      </div>
+      <div class="hint">Marca como posible duplicado dos pedidos FACTURA del mismo cliente, dentro de la ventana de días elegida, con Bultos y Sub.Final dentro de la tolerancia elegida.</div>
+    </div>
+    <div class="card">
+      <div class="scroll-x" id="table-duplicados"></div>
+    </div>
+  </div>
+
+  <!-- ============== TAB: VENTAS EXTRAORDINARIAS ============== -->
+  <div class="tab-panel" id="tab-extraordinarias" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>Top N por Importe Total</label>
+          <input type="text" inputmode="numeric" id="extra-topn" value="30">
+        </div>
+        <button class="ghost" id="btn-refresh-extra" type="button">↻ Recalcular</button>
+        <button class="ghost" id="btn-export-extra" type="button">⬇ Exportar a Excel</button>
+      </div>
+      <div class="hint">Un renglón por cliente y fecha de pedido (sumando todos sus artículos ese día), ordenado por Importe Total de mayor a menor.</div>
+    </div>
+    <div class="card">
+      <div class="scroll-x" id="table-extraordinarias"></div>
+    </div>
+  </div>
+
+  <!-- ============== TAB: FUERA DE RUTA ============== -->
+  <div class="tab-panel" id="tab-fuera-ruta" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>¿Qué día es "mañana"?</label>
+          <select id="fuera-ruta-dia">
+            <option value="">Elegí un día…</option>
+            <option value="LU">Lunes</option>
+            <option value="MA">Martes</option>
+            <option value="MI">Miércoles</option>
+            <option value="JU">Jueves</option>
+            <option value="VI">Viernes</option>
+            <option value="SA">Sábado</option>
+            <option value="DO">Domingo</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Vendedor</label>
+          <select id="fuera-ruta-vendedor"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label>Fecha a revisar en la base</label>
+          <select id="fuera-ruta-fecha"><option value="">Todas las fechas</option></select>
+        </div>
+        <button class="ghost" id="btn-export-fuera-ruta" type="button">⬇ Exportar a Excel</button>
+      </div>
+      <div class="hint">Clientes que aparecen en la base de ventas pero no tienen entrega marcada para el día elegido, según la base de días de visita (BEES ONE). El selector de fecha filtra a qué venta de la base te referís — por defecto usa la fecha más reciente de la base cargada, para no mezclar pedidos de días distintos en un mismo chequeo.</div>
+    </div>
+    <div class="card">
+      <div class="scroll-x" id="table-fuera-ruta"></div>
+    </div>
+  </div>
+
+  <!-- ============== TAB: COMPRADORES DEL MES ============== -->
+  <div class="tab-panel" id="tab-compradores-mes" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>Fecha de pedido ("mañana")</label>
+          <select id="compradores-fecha"><option value="">Elegí una fecha…</option></select>
+        </div>
+        <div class="field">
+          <label>Vendedor</label>
+          <select id="compradores-vendedor"><option value="">Todos</option></select>
+        </div>
+        <button class="ghost" id="btn-export-compradores" type="button">⬇ Exportar a Excel</button>
+      </div>
+      <div class="hint">La fecha se toma de la base de Pedidos (Paso 3). Para cada cliente con pedido esa fecha, se marca si ya compró Cerveza / UNG / Latón 1890 / Michelob / Pure Gold en el mes — combinando el acumulado (Paso 5) con la base de ventas (Paso 2), así que si la primera compra de UNG es justo la de hoy, también cuenta como SÍ. El día de la semana para cruzar contra BEES ONE se calcula solo a partir de la fecha elegida.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Clientes con pedido esa fecha</div>
+      <div class="scroll-x" id="table-compradores-mes"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Tienen entrega esa fecha pero no cargaron ningún pedido</div>
+      <div class="scroll-x" id="table-compradores-sin-pedido"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   CROSSWALK: Marca+Pack (tabla PTR) -> Marca+Calibre (base de ventas)
+   Si agregás una marca o pack nuevo a la tabla PTR que no está
+   acá, la app te va a avisar en vez de inventar un cruce.
+   ============================================================ */
+const CROSSWALK = [
+  {marca:'1890', pack:'710 LATA', marcaRaw:'QUILMES 1890', calibreRaw:'710 CC LATAS'},
+  {marca:'1890', pack:'LATA', marcaRaw:'QUILMES 1890', calibreRaw:'473 CC LATAS'},
+  {marca:'1890', pack:'LITRO', marcaRaw:'QUILMES 1890', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'ANDES', pack:'710 LATA', marcaRaw:'ANDES', calibreRaw:'710 CC LATAS'},
+  {marca:'ANDES', pack:'710 LATA', marcaRaw:'ANDES BLANCA', calibreRaw:'710 CC LATAS'},
+  {marca:'ANDES', pack:'LATA', marcaRaw:'ANDES', calibreRaw:'473 CC LATAS'},
+  {marca:'ANDES', pack:'LITRO', marcaRaw:'ANDES', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'AO RUBIA', pack:'710 LATA', marcaRaw:'ANDES ORIGEN RUBIA', calibreRaw:'710 CC LATAS'},
+  {marca:'AO RUBIA', pack:'LATA', marcaRaw:'ANDES ORIGEN RUBIA', calibreRaw:'473 CC LATAS'},
+  {marca:'BAJO CERO', pack:'LITRO', marcaRaw:'QUILMES BAJO CERO', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'BRAHMA', pack:'710 LATA', marcaRaw:'BRAHMA', calibreRaw:'710 CC LATAS'},
+  {marca:'BRAHMA', pack:'LATA', marcaRaw:'BRAHMA', calibreRaw:'473 CC LATAS'},
+  {marca:'BRAHMA', pack:'LITRO', marcaRaw:'BRAHMA', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'BUDWEISER', pack:'710 LATA', marcaRaw:'BUDWEISER', calibreRaw:'710 CC LATAS'},
+  {marca:'BUDWEISER', pack:'LATA', marcaRaw:'BUDWEISER', calibreRaw:'473 CC LATAS'},
+  {marca:'BUDWEISER', pack:'LITRO', marcaRaw:'BUDWEISER', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'CORONA', pack:'710', marcaRaw:'CORONA', calibreRaw:'BOTELLA 710 CC'},
+  {marca:'CORONA', pack:'LATA', marcaRaw:'CORONA', calibreRaw:'473 CC LATAS'},
+  {marca:'CORONA', pack:'PORRON', marcaRaw:'CORONA', calibreRaw:'330 CC VIDRIO'},
+  {marca:'QUILMES', pack:'710 LATA', marcaRaw:'QUILMES', calibreRaw:'710 CC LATAS'},
+  {marca:'QUILMES', pack:'LATA', marcaRaw:'QUILMES', calibreRaw:'473 CC LATAS'},
+  {marca:'QUILMES', pack:'LITRO', marcaRaw:'QUILMES', calibreRaw:'1000 CC VIDRIO'},
+  {marca:'SA', pack:'LATA', marcaRaw:'STELLA ARTOIS', calibreRaw:'473 CC LATAS'},
+  {marca:'SA', pack:'LITRO', marcaRaw:'STELLA ARTOIS', calibreRaw:'975 CC VIDRIO'}
+];
+
+const DEFAULT_EXCLUDED_VENDORS = ['FIGUEROA', 'LEON', "D'URSO", 'DURSO'];
+
+/* [codigo_cliente, canal] — misma clasificación REF/OTROS/MAY/AS/K+T que en
+   la herramienta de Relevamiento de Precios, cruzada por código de cliente */
+const CLIENTS_CANAL = [[1,"K+T"],[3,"AS"],[80756,"K+T"],[80838,"REF"],[81097,"K+T"],[81099,"K+T"],[81222,"REF"],[81842,"K+T"],[81870,"K+T"],[85844,"K+T"],[85875,"K+T"],[86209,"K+T"],[86393,"K+T"],[87336,"K+T"],[88517,"K+T"],[88690,"OTROS"],[96927,"K+T"],[97357,"K+T"],[97562,"REF"],[97885,"K+T"],[98557,"K+T"],[101193,"K+T"],[103267,"K+T"],[107790,"K+T"],[109926,"K+T"],[112154,"K+T"],[112605,"K+T"],[112971,"K+T"],[113821,"K+T"],[114666,"K+T"],[116962,"K+T"],[118569,"REF"],[118775,"K+T"],[120085,"K+T"],[120147,"K+T"],[120654,"OTROS"],[121593,"K+T"],[121863,"K+T"],[125122,"K+T"],[125152,"K+T"],[126671,"K+T"],[126827,"K+T"],[132090,"K+T"],[135144,"K+T"],[136080,"K+T"],[136759,"K+T"],[136933,"K+T"],[137307,"K+T"],[138068,"K+T"],[138281,"K+T"],[140958,"K+T"],[141224,"OTROS"],[141414,"K+T"],[142206,"K+T"],[142554,"K+T"],[143458,"K+T"],[145139,"K+T"],[145612,"K+T"],[145978,"OTROS"],[146110,"K+T"],[146189,"K+T"],[146386,"K+T"],[146626,"K+T"],[146951,"K+T"],[147121,"K+T"],[149250,"K+T"],[149634,"K+T"],[155102,"K+T"],[155651,"OTROS"],[156952,"K+T"],[157140,"K+T"],[157572,"K+T"],[157677,"OTROS"],[157679,"OTROS"],[157680,"OTROS"],[158215,"REF"],[158259,"K+T"],[158260,"K+T"],[158572,"K+T"],[158679,"K+T"],[158686,"K+T"],[158766,"K+T"],[159875,"K+T"],[164842,"K+T"],[166276,"K+T"],[166984,"K+T"],[167426,"K+T"],[167748,"K+T"],[168277,"K+T"],[168347,"K+T"],[168749,"OTROS"],[169818,"K+T"],[170011,"K+T"],[170323,"K+T"],[170328,"K+T"],[170596,"K+T"],[171828,"K+T"],[172128,"K+T"],[172394,"OTROS"],[172495,"K+T"],[172601,"K+T"],[172858,"K+T"],[173038,"OTROS"],[173469,"OTROS"],[174084,"K+T"],[174423,"K+T"],[174441,"K+T"],[174716,"K+T"],[174915,"OTROS"],[175114,"K+T"],[175321,"OTROS"],[175497,"K+T"],[175695,"K+T"],[175697,"K+T"],[175966,"K+T"],[176025,"K+T"],[176027,"K+T"],[176126,"K+T"],[176135,"K+T"],[176230,"K+T"],[176265,"REF"],[177211,"K+T"],[177895,"K+T"],[177947,"K+T"],[178669,"K+T"],[178746,"K+T"],[178833,"K+T"],[180240,"K+T"],[180621,"K+T"],[180848,"OTROS"],[181498,"K+T"],[181993,"K+T"],[182084,"K+T"],[182710,"K+T"],[183199,"K+T"],[183333,"K+T"],[183393,"K+T"],[183494,"K+T"],[184279,"REF"],[184531,"K+T"],[184607,"K+T"],[185217,"REF"],[185227,"REF"],[185246,"K+T"],[185617,"K+T"],[185686,"K+T"],[186229,"K+T"],[186401,"OTROS"],[186659,"K+T"],[186773,"K+T"],[186887,"REF"],[187015,"K+T"],[187748,"K+T"],[188015,"K+T"],[188551,"K+T"],[188582,"K+T"],[188710,"K+T"],[188953,"REF"],[189176,"REF"],[189248,"K+T"],[189887,"K+T"],[300993,"AS"],[301331,"K+T"],[302038,"K+T"],[302448,"K+T"],[302515,"K+T"],[302678,"K+T"],[303292,"K+T"],[303386,"K+T"],[303696,"K+T"],[304149,"OTROS"],[304159,"MAY"],[304892,"K+T"],[305364,"K+T"],[305909,"K+T"],[306125,"K+T"],[306177,"K+T"],[306254,"K+T"],[306577,"K+T"],[306758,"K+T"],[306962,"K+T"],[307205,"K+T"],[308746,"REF"],[308751,"K+T"],[309058,"K+T"],[309171,"REF"],[309223,"K+T"],[309575,"K+T"],[309586,"K+T"],[309783,"K+T"],[310086,"REF"],[310334,"K+T"],[310529,"K+T"],[310533,"K+T"],[310611,"K+T"],[310758,"K+T"],[310931,"K+T"],[311003,"K+T"],[311024,"REF"],[311081,"K+T"],[311771,"K+T"],[311790,"K+T"],[311923,"REF"],[311942,"K+T"],[312139,"REF"],[314188,"K+T"],[314417,"K+T"],[314645,"K+T"],[314648,"K+T"],[315320,"K+T"],[315400,"K+T"],[315992,"K+T"],[316720,"AS"],[316766,"K+T"],[317306,"K+T"],[317336,"K+T"],[317860,"K+T"],[318100,"K+T"],[318355,"K+T"],[319838,"K+T"],[320024,"OTROS"],[320031,"OTROS"],[320706,"REF"],[321734,"K+T"],[321752,"K+T"],[322204,"K+T"],[322246,"K+T"],[322247,"K+T"],[322793,"K+T"],[322874,"K+T"],[323106,"K+T"],[323113,"REF"],[323606,"K+T"],[323618,"K+T"],[324330,"AS"],[325215,"K+T"],[325219,"K+T"],[325766,"K+T"],[325769,"REF"],[325770,"K+T"],[325962,"K+T"],[326261,"OTROS"],[326262,"OTROS"],[326622,"REF"],[327039,"AS"],[327394,"K+T"],[328259,"REF"],[328344,"K+T"],[328370,"K+T"],[328376,"K+T"],[328537,"K+T"],[328695,"K+T"],[329083,"K+T"],[329686,"REF"],[329899,"REF"],[330015,"K+T"],[330093,"K+T"],[330439,"OTROS"],[330617,"REF"],[330784,"K+T"],[331144,"K+T"],[331145,"K+T"],[331742,"K+T"],[331892,"K+T"],[332113,"K+T"],[332117,"K+T"],[332121,"K+T"],[332392,"REF"],[332477,"K+T"],[332504,"K+T"],[332898,"MAY"],[333349,"K+T"],[335507,"K+T"],[336214,"OTROS"],[336598,"OTROS"],[336676,"REF"],[336681,"K+T"],[336746,"K+T"],[337065,"K+T"],[338502,"K+T"],[340142,"K+T"],[340655,"REF"],[340703,"K+T"],[341807,"K+T"],[342385,"K+T"],[342774,"K+T"],[354179,"K+T"],[354243,"K+T"],[354713,"K+T"],[356780,"AS"],[356793,"REF"],[357619,"REF"],[357715,"K+T"],[357749,"K+T"],[357757,"K+T"],[358087,"K+T"],[358812,"K+T"],[358824,"K+T"],[358826,"K+T"],[359051,"K+T"],[359316,"K+T"],[359341,"K+T"],[360104,"REF"],[360840,"K+T"],[360857,"K+T"],[363044,"OTROS"],[363213,"K+T"],[363634,"K+T"],[364166,"K+T"],[364888,"AS"],[365504,"K+T"],[365526,"K+T"],[366066,"K+T"],[366407,"K+T"],[366634,"REF"],[366738,"K+T"],[366741,"K+T"],[367067,"OTROS"],[367245,"K+T"],[367247,"K+T"],[367564,"K+T"],[367570,"K+T"],[367572,"K+T"],[367825,"K+T"],[367826,"K+T"],[368330,"K+T"],[368440,"REF"],[369535,"K+T"],[369823,"K+T"],[369838,"K+T"],[369926,"K+T"],[369945,"K+T"],[370469,"K+T"],[370471,"K+T"],[370472,"K+T"],[370665,"AS"],[370677,"K+T"],[370977,"K+T"],[370983,"AS"],[371283,"REF"],[371309,"K+T"],[371310,"K+T"],[371540,"K+T"],[371744,"K+T"],[371885,"K+T"],[372310,"K+T"],[372441,"K+T"],[372457,"K+T"],[372551,"AS"],[372678,"K+T"],[373150,"K+T"],[373160,"K+T"],[373813,"K+T"],[374459,"K+T"],[374999,"REF"],[375191,"K+T"],[375334,"K+T"],[375567,"AS"],[375750,"K+T"],[375755,"K+T"],[375937,"K+T"],[375940,"K+T"],[376160,"K+T"],[376323,"K+T"],[376483,"K+T"],[376620,"K+T"],[377063,"K+T"],[377076,"OTROS"],[377081,"OTROS"],[377082,"OTROS"],[377084,"OTROS"],[377089,"OTROS"],[377090,"OTROS"],[377091,"OTROS"],[377092,"OTROS"],[377094,"OTROS"],[377095,"OTROS"],[377096,"OTROS"],[377098,"OTROS"],[377099,"OTROS"],[377100,"OTROS"],[377101,"OTROS"],[377102,"OTROS"],[377103,"OTROS"],[377105,"OTROS"],[377107,"OTROS"],[377217,"REF"],[377295,"K+T"],[377302,"K+T"],[377306,"K+T"],[377567,"K+T"],[377658,"REF"],[378703,"AS"],[378955,"K+T"],[379072,"K+T"],[379074,"K+T"],[379304,"AS"],[379772,"K+T"],[379792,"K+T"],[379993,"K+T"],[380611,"K+T"],[380792,"K+T"],[380904,"K+T"],[381342,"K+T"],[382202,"K+T"],[382209,"K+T"],[382312,"K+T"],[382323,"K+T"],[382377,"K+T"],[382741,"REF"],[382770,"K+T"],[382847,"K+T"],[382849,"K+T"],[382927,"K+T"],[382990,"K+T"],[383091,"K+T"],[383265,"REF"],[383576,"K+T"],[383588,"K+T"],[383634,"K+T"],[383967,"K+T"],[384057,"K+T"],[384198,"K+T"],[384376,"K+T"],[384395,"K+T"],[384446,"AS"],[384523,"K+T"],[384535,"K+T"],[385250,"REF"],[385457,"REF"],[385580,"OTROS"],[385736,"K+T"],[385801,"AS"],[386218,"K+T"],[386354,"K+T"],[386364,"REF"],[386434,"K+T"],[386511,"K+T"],[386983,"K+T"],[388480,"K+T"],[388483,"K+T"],[388493,"K+T"],[388777,"K+T"],[388801,"REF"],[389131,"K+T"],[389135,"K+T"],[389136,"K+T"],[389143,"K+T"],[389271,"K+T"],[389333,"K+T"],[389608,"K+T"],[389957,"OTROS"],[389961,"AS"],[389962,"AS"],[390002,"K+T"],[390005,"K+T"],[390011,"K+T"],[390025,"K+T"],[390165,"K+T"],[390250,"K+T"],[390260,"K+T"],[390482,"K+T"],[390483,"K+T"],[391799,"K+T"],[392308,"K+T"],[392310,"K+T"],[392447,"K+T"],[392514,"K+T"],[392732,"K+T"],[392866,"K+T"],[392918,"K+T"],[393402,"K+T"],[393658,"AS"],[393676,"K+T"],[393944,"K+T"],[393968,"K+T"],[394661,"K+T"],[394666,"K+T"],[394713,"K+T"],[394957,"K+T"],[395085,"OTROS"],[395448,"K+T"],[395450,"K+T"],[395453,"AS"],[395583,"REF"],[395584,"K+T"],[395765,"K+T"],[395858,"AS"],[395870,"K+T"],[395873,"K+T"],[396205,"K+T"],[396422,"K+T"],[396650,"AS"],[397442,"K+T"],[397953,"AS"],[398018,"K+T"],[398092,"K+T"],[398178,"K+T"],[398411,"K+T"],[398561,"K+T"],[398633,"OTROS"],[398783,"K+T"],[398819,"K+T"],[398821,"K+T"],[398823,"K+T"],[398845,"K+T"],[398889,"OTROS"],[398926,"REF"],[398931,"REF"],[399354,"AS"],[399475,"K+T"],[399481,"REF"],[399488,"AS"],[399489,"K+T"],[399798,"K+T"],[399923,"K+T"],[403946,"K+T"],[403955,"K+T"],[404255,"K+T"],[404541,"OTROS"],[404605,"K+T"],[404777,"K+T"],[404780,"AS"],[404807,"K+T"],[404808,"K+T"],[404836,"K+T"],[404881,"REF"],[404949,"K+T"],[405138,"AS"],[405186,"K+T"],[405251,"K+T"],[405593,"REF"],[405685,"K+T"],[405772,"AS"],[405928,"K+T"],[405998,"K+T"],[406079,"OTROS"],[406243,"OTROS"],[406422,"K+T"],[406629,"AS"],[406989,"K+T"],[407090,"REF"],[407229,"AS"],[408360,"K+T"],[408555,"K+T"],[408621,"OTROS"],[408730,"K+T"],[408735,"K+T"],[408736,"K+T"],[408740,"K+T"],[408741,"AS"],[408744,"K+T"],[408756,"K+T"],[408758,"K+T"],[408790,"REF"],[408885,"K+T"],[409103,"K+T"],[409109,"K+T"],[409110,"K+T"],[409318,"K+T"],[409327,"K+T"],[409703,"K+T"],[409793,"K+T"],[410132,"K+T"],[410168,"K+T"],[410251,"K+T"],[410327,"K+T"],[410355,"K+T"],[410552,"K+T"],[410560,"K+T"],[410568,"K+T"],[410578,"K+T"],[410892,"REF"],[411030,"AS"],[411038,"K+T"],[411100,"K+T"],[411216,"K+T"],[411372,"K+T"],[411484,"AS"],[411673,"K+T"],[411854,"K+T"],[411858,"REF"],[411894,"AS"],[411975,"K+T"],[411979,"AS"],[412659,"K+T"],[412789,"K+T"],[413162,"K+T"],[413274,"K+T"],[413277,"K+T"],[413278,"K+T"],[413487,"K+T"],[413506,"K+T"],[413662,"K+T"],[414103,"K+T"],[414317,"K+T"],[414319,"K+T"],[414398,"REF"],[414589,"K+T"],[414592,"K+T"],[414596,"K+T"],[414601,"K+T"],[415124,"K+T"],[415163,"REF"],[415415,"AS"],[415611,"K+T"],[416194,"REF"],[416196,"K+T"],[416210,"K+T"],[416213,"K+T"],[416286,"OTROS"],[416323,"OTROS"],[416474,"OTROS"],[416676,"REF"],[416797,"K+T"],[417046,"K+T"],[417259,"K+T"],[417578,"K+T"],[417755,"K+T"],[417930,"K+T"],[417931,"K+T"],[417950,"K+T"],[418135,"K+T"],[418137,"OTROS"],[418141,"K+T"],[418144,"K+T"],[418153,"K+T"],[418157,"K+T"],[418160,"OTROS"],[418172,"OTROS"],[418178,"K+T"],[418187,"K+T"],[418251,"K+T"],[418320,"K+T"],[418322,"K+T"],[418335,"K+T"],[418339,"K+T"],[418595,"K+T"],[418654,"K+T"],[418660,"K+T"],[418721,"REF"],[418862,"K+T"],[418946,"K+T"],[418948,"K+T"],[418950,"K+T"],[418962,"K+T"],[419232,"K+T"],[419349,"K+T"],[419441,"REF"],[419671,"K+T"],[419680,"AS"],[420089,"K+T"],[420127,"K+T"],[420129,"K+T"],[420262,"K+T"],[420265,"K+T"],[420456,"K+T"],[420458,"K+T"],[420584,"K+T"],[420729,"K+T"],[420806,"REF"],[421140,"K+T"],[421148,"K+T"],[421865,"K+T"],[422213,"K+T"],[422245,"K+T"],[422354,"K+T"],[422359,"K+T"],[422373,"K+T"],[422388,"K+T"],[422502,"K+T"],[422558,"K+T"],[422587,"K+T"],[422731,"K+T"],[422856,"REF"],[422944,"REF"],[423084,"K+T"],[423238,"K+T"],[423253,"K+T"],[423254,"K+T"],[423282,"K+T"],[423609,"K+T"],[423733,"AS"],[423823,"K+T"],[424004,"K+T"],[424436,"OTROS"],[424464,"REF"],[424514,"K+T"],[424527,"K+T"],[424578,"K+T"],[424834,"K+T"],[424835,"K+T"],[424861,"AS"],[424925,"K+T"],[425060,"K+T"],[425095,"K+T"],[425096,"K+T"],[425105,"K+T"],[425108,"K+T"],[425430,"K+T"],[425481,"K+T"],[425567,"K+T"],[425703,"K+T"],[425718,"K+T"],[425806,"K+T"],[425828,"K+T"],[425852,"K+T"],[425901,"K+T"],[426266,"K+T"],[426397,"K+T"],[426421,"K+T"],[426459,"K+T"],[426464,"K+T"],[426466,"K+T"],[426510,"K+T"],[426583,"K+T"],[426587,"K+T"],[426616,"K+T"],[426631,"K+T"],[426725,"AS"],[426728,"K+T"],[426731,"K+T"],[426857,"K+T"],[427070,"K+T"],[427185,"K+T"],[427461,"K+T"],[427884,"K+T"],[427919,"K+T"],[427920,"K+T"],[428200,"K+T"],[428204,"K+T"],[428210,"K+T"],[428250,"K+T"],[428260,"K+T"],[428261,"K+T"],[428263,"K+T"],[428281,"K+T"],[428599,"REF"],[428612,"K+T"],[428617,"K+T"],[428624,"REF"],[428674,"K+T"],[428681,"K+T"],[428769,"AS"],[428776,"K+T"],[428778,"K+T"],[428823,"REF"],[428824,"K+T"],[428826,"K+T"],[428955,"K+T"],[428960,"K+T"],[429121,"K+T"],[429298,"K+T"],[429308,"K+T"],[429323,"OTROS"],[429325,"OTROS"],[429391,"K+T"],[429426,"K+T"],[429430,"K+T"],[429603,"K+T"],[429942,"K+T"],[429950,"K+T"],[429967,"K+T"],[429976,"K+T"],[430220,"K+T"],[430275,"K+T"],[430380,"K+T"],[430423,"K+T"],[430524,"K+T"],[430526,"REF"],[430538,"K+T"],[430612,"K+T"],[430734,"REF"],[430985,"K+T"],[431040,"K+T"],[431080,"K+T"],[431184,"MAY"],[431186,"K+T"],[431483,"K+T"],[431484,"K+T"],[431487,"K+T"],[431515,"REF"],[431555,"K+T"],[431630,"K+T"],[431637,"K+T"],[431648,"K+T"],[431753,"K+T"],[431884,"AS"],[432067,"K+T"],[432137,"OTROS"],[432373,"K+T"],[432375,"K+T"],[432623,"K+T"],[432627,"K+T"],[432747,"K+T"],[432832,"K+T"],[432841,"REF"],[432987,"K+T"],[432990,"K+T"],[433324,"K+T"],[433534,"REF"],[433629,"K+T"],[433651,"REF"],[433693,"K+T"],[433709,"K+T"],[433724,"K+T"],[433727,"K+T"],[433814,"K+T"],[433825,"K+T"],[433868,"K+T"],[433881,"K+T"],[433894,"K+T"],[434012,"K+T"],[434761,"K+T"],[434764,"K+T"],[434768,"K+T"],[434966,"OTROS"],[435001,"K+T"],[435235,"K+T"],[435237,"K+T"],[435243,"REF"],[435331,"K+T"],[435864,"K+T"],[435949,"K+T"],[436122,"K+T"],[436159,"K+T"],[436388,"K+T"],[436389,"K+T"],[436401,"K+T"],[436560,"K+T"],[436565,"K+T"],[436585,"K+T"],[436760,"K+T"],[436933,"K+T"],[436958,"K+T"],[437139,"K+T"],[437147,"K+T"],[437225,"K+T"],[437471,"K+T"],[437476,"K+T"],[437716,"K+T"],[437718,"K+T"],[437895,"AS"],[437928,"K+T"],[437969,"REF"],[437993,"K+T"],[438019,"K+T"],[438202,"K+T"],[438314,"K+T"],[438317,"K+T"],[438390,"REF"],[438411,"K+T"],[438413,"K+T"],[438506,"REF"],[438579,"K+T"],[438704,"K+T"],[438795,"K+T"],[438801,"K+T"],[438802,"K+T"],[438803,"K+T"],[438808,"K+T"],[438811,"K+T"],[438932,"K+T"],[438950,"K+T"],[439098,"K+T"],[439100,"K+T"],[439124,"K+T"],[439236,"K+T"],[439376,"K+T"],[439395,"REF"],[439475,"K+T"],[439484,"K+T"],[439632,"K+T"],[439736,"K+T"],[439764,"REF"],[439769,"K+T"],[440072,"K+T"],[440077,"K+T"],[440376,"K+T"],[440479,"K+T"],[440507,"K+T"],[440718,"REF"],[440723,"K+T"],[440769,"K+T"],[441296,"K+T"],[441330,"K+T"],[441466,"K+T"],[441481,"REF"],[441564,"K+T"],[441628,"K+T"],[441676,"K+T"],[441710,"K+T"],[441757,"K+T"],[441758,"K+T"],[441869,"K+T"],[441887,"REF"],[441915,"K+T"],[441988,"K+T"],[441989,"K+T"],[442145,"K+T"],[442193,"K+T"],[442214,"K+T"],[442232,"REF"],[442265,"K+T"],[442270,"K+T"],[442298,"K+T"],[442374,"K+T"],[442443,"K+T"],[442512,"K+T"],[442673,"MAY"],[442685,"K+T"],[442695,"K+T"],[442719,"K+T"],[442757,"K+T"],[442785,"K+T"],[442907,"K+T"],[442931,"K+T"],[442947,"K+T"],[443282,"REF"],[443344,"K+T"],[443365,"REF"],[443469,"AS"],[443487,"REF"],[443504,"K+T"],[443563,"REF"],[443679,"K+T"],[443754,"REF"],[443755,"K+T"],[443800,"K+T"],[443814,"K+T"],[443863,"K+T"],[443866,"K+T"],[443907,"K+T"],[443954,"K+T"],[444003,"K+T"],[444065,"K+T"],[444122,"REF"],[444333,"K+T"],[444338,"K+T"],[444339,"AS"],[444351,"K+T"],[444499,"K+T"],[444582,"REF"],[444827,"K+T"],[444845,"K+T"],[444913,"K+T"],[444925,"REF"],[445114,"K+T"],[445115,"K+T"],[445117,"REF"],[445170,"K+T"],[445234,"K+T"],[445407,"K+T"],[445581,"K+T"],[445599,"K+T"],[445671,"K+T"],[445692,"K+T"],[445701,"MAY"],[445734,"K+T"],[445831,"K+T"],[445979,"REF"],[446029,"K+T"],[446106,"K+T"],[446217,"K+T"],[446301,"K+T"],[446330,"REF"],[446606,"K+T"],[446643,"REF"],[446651,"REF"],[446690,"K+T"],[446706,"REF"],[446734,"K+T"],[446757,"K+T"],[446953,"K+T"],[447088,"REF"],[447260,"K+T"],[447272,"K+T"],[447287,"K+T"],[447332,"K+T"],[447373,"K+T"],[447488,"K+T"],[447500,"K+T"],[447561,"K+T"],[447626,"K+T"],[447638,"K+T"],[447641,"K+T"],[447677,"K+T"],[447692,"K+T"],[447695,"K+T"],[447754,"K+T"],[447765,"AS"],[447913,"K+T"],[447931,"AS"],[447934,"K+T"],[447936,"REF"],[448166,"K+T"],[448196,"AS"],[448223,"REF"],[448304,"K+T"],[448515,"K+T"],[448518,"REF"],[448643,"REF"],[448682,"REF"],[448792,"K+T"],[448817,"K+T"],[448908,"K+T"],[448971,"REF"],[449020,"K+T"],[449083,"K+T"],[449194,"REF"],[449313,"REF"],[449314,"K+T"],[449373,"K+T"],[449415,"REF"],[449446,"K+T"],[449447,"K+T"],[449468,"K+T"],[449505,"REF"],[449585,"K+T"],[449595,"K+T"],[449597,"K+T"],[449639,"K+T"],[449658,"REF"],[449693,"K+T"],[449747,"REF"],[449764,"MAY"],[449822,"K+T"],[449929,"K+T"],[449979,"K+T"],[450036,"K+T"],[450193,"K+T"],[450199,"K+T"],[450212,"K+T"],[450217,"K+T"],[450290,"K+T"],[450304,"K+T"],[450335,"K+T"],[450371,"K+T"],[450556,"K+T"],[450561,"K+T"],[450787,"K+T"],[450878,"K+T"],[450879,"K+T"],[450894,"K+T"],[450921,"REF"],[450922,"REF"],[450945,"K+T"],[450952,"K+T"],[450992,"REF"],[451040,"K+T"],[451081,"K+T"],[451215,"K+T"],[451230,"K+T"],[451266,"K+T"],[451285,"K+T"],[451332,"K+T"],[451349,"REF"],[451371,"K+T"],[451378,"K+T"],[451385,"REF"],[451399,"K+T"],[451425,"K+T"],[451426,"REF"],[451472,"MAY"],[451507,"K+T"],[451761,"REF"],[451778,"AS"],[451785,"REF"],[451881,"REF"],[451886,"K+T"],[451900,"K+T"],[451911,"K+T"],[451915,"K+T"],[452039,"K+T"],[452065,"K+T"],[452069,"K+T"],[452099,"K+T"],[452105,"K+T"],[452269,"K+T"],[452400,"K+T"],[452611,"REF"],[452675,"K+T"],[452745,"K+T"],[452815,"K+T"],[452913,"K+T"],[453055,"K+T"],[453192,"REF"],[453202,"REF"],[453217,"K+T"],[453257,"REF"],[453271,"REF"],[453280,"K+T"],[453374,"K+T"],[453432,"REF"],[453526,"AS"],[453700,"REF"],[453704,"K+T"],[453711,"REF"],[453795,"K+T"],[453803,"K+T"],[453835,"K+T"],[453852,"K+T"],[453866,"REF"],[453898,"K+T"],[453903,"REF"],[453954,"K+T"],[453962,"K+T"],[453963,"K+T"],[454032,"K+T"],[454082,"REF"],[454178,"REF"],[454179,"REF"],[454205,"REF"],[454320,"REF"],[454443,"K+T"],[454458,"K+T"],[454464,"K+T"],[454679,"K+T"],[454765,"REF"],[454791,"K+T"],[454832,"K+T"],[454841,"REF"],[454861,"K+T"],[455055,"K+T"],[455123,"K+T"],[455137,"K+T"],[455181,"K+T"],[455188,"K+T"],[455192,"K+T"],[455204,"REF"],[455212,"K+T"],[455220,"K+T"],[455301,"K+T"],[455311,"K+T"],[455334,"K+T"],[455381,"K+T"],[455408,"K+T"],[455435,"K+T"],[455510,"K+T"],[455573,"K+T"],[455664,"K+T"],[455919,"REF"],[456142,"REF"],[456150,"K+T"],[456190,"K+T"],[456203,"K+T"],[456227,"K+T"],[456321,"K+T"],[456340,"K+T"],[456341,"K+T"],[456371,"K+T"],[456374,"K+T"],[456506,"K+T"],[456536,"K+T"],[456578,"K+T"],[456613,"K+T"],[456615,"REF"],[456694,"K+T"],[456696,"K+T"],[456830,"K+T"],[456838,"K+T"],[456924,"K+T"],[456935,"REF"],[456956,"REF"],[457016,"REF"],[457053,"K+T"],[457094,"REF"],[457102,"REF"],[457119,"REF"],[457132,"REF"],[457156,"REF"],[457174,"REF"],[457285,"K+T"],[457294,"REF"],[457328,"K+T"],[457339,"K+T"],[457444,"K+T"],[457505,"K+T"],[457602,"K+T"],[457644,"REF"],[457645,"REF"],[457696,"K+T"],[457719,"K+T"],[457823,"K+T"],[457855,"K+T"],[457877,"K+T"],[458029,"REF"],[458071,"K+T"],[458072,"K+T"],[458091,"REF"],[458198,"REF"],[458223,"K+T"],[458286,"K+T"],[458297,"REF"],[458327,"K+T"],[458333,"K+T"],[458352,"AS"],[458463,"REF"],[458504,"REF"],[458693,"K+T"],[458852,"K+T"],[458921,"K+T"],[458944,"K+T"],[459014,"REF"],[459017,"REF"],[459076,"REF"],[459125,"K+T"],[459184,"REF"],[459193,"K+T"],[459285,"K+T"],[459324,"REF"],[459353,"K+T"],[459384,"K+T"],[459419,"K+T"],[459447,"K+T"],[459449,"K+T"],[459456,"K+T"],[459515,"K+T"],[459522,"K+T"],[459523,"REF"],[459719,"K+T"],[459738,"K+T"],[459876,"K+T"],[459892,"REF"],[459896,"REF"],[459961,"K+T"],[460028,"K+T"],[460037,"K+T"],[460056,"K+T"],[460125,"K+T"],[460127,"REF"],[460190,"K+T"],[460191,"K+T"],[460265,"K+T"],[460390,"K+T"],[460440,"REF"],[460602,"REF"],[460620,"K+T"],[460625,"K+T"],[460629,"REF"],[460732,"K+T"],[460754,"REF"],[460770,"K+T"],[460773,"K+T"],[460775,"K+T"],[460820,"K+T"],[460844,"REF"],[460857,"K+T"],[461078,"K+T"],[461079,"K+T"],[461083,"K+T"],[461085,"K+T"],[461185,"K+T"],[461336,"K+T"],[461347,"K+T"],[461361,"K+T"],[461383,"K+T"],[461388,"REF"],[461392,"K+T"],[461405,"K+T"],[461452,"K+T"],[461453,"REF"],[461649,"REF"],[461661,"K+T"],[461772,"K+T"],[461806,"K+T"],[461851,"K+T"],[461878,"K+T"],[461891,"K+T"],[461909,"K+T"],[461962,"K+T"],[461975,"K+T"],[461979,"K+T"],[462003,"K+T"],[462041,"K+T"],[462060,"K+T"],[462062,"REF"],[462190,"K+T"],[462193,"K+T"],[462212,"K+T"],[462232,"K+T"],[462233,"K+T"],[462318,"K+T"],[462398,"K+T"],[462536,"K+T"],[462601,"REF"],[462603,"K+T"],[462719,"K+T"],[462773,"K+T"],[462814,"K+T"],[462911,"K+T"],[462964,"K+T"],[463054,"K+T"],[463076,"K+T"],[463170,"K+T"],[463188,"REF"],[463191,"REF"],[463262,"K+T"],[463270,"K+T"],[463409,"K+T"],[463435,"REF"],[463441,"K+T"],[463673,"K+T"],[463674,"K+T"],[463692,"K+T"],[463746,"K+T"],[463836,"REF"],[463939,"K+T"],[463999,"K+T"],[464076,"K+T"],[464112,"REF"],[464119,"K+T"],[464175,"REF"],[464213,"K+T"],[464695,"REF"],[464730,"K+T"],[464743,"K+T"],[464744,"K+T"],[464747,"K+T"],[464789,"REF"],[464839,"K+T"],[464914,"REF"],[464926,"K+T"],[464933,"K+T"],[464942,"K+T"],[464995,"K+T"],[465069,"K+T"],[465112,"REF"],[465143,"K+T"],[465196,"K+T"],[465221,"K+T"],[465286,"AS"],[465295,"K+T"],[465323,"K+T"],[465341,"REF"],[465352,"K+T"],[465372,"K+T"],[465373,"K+T"],[465374,"K+T"],[465409,"REF"],[465415,"K+T"],[465417,"K+T"],[465428,"K+T"],[465489,"K+T"],[465503,"K+T"],[465519,"K+T"],[465665,"K+T"],[465709,"K+T"],[465723,"K+T"],[465814,"K+T"],[465823,"K+T"],[465850,"K+T"],[465884,"REF"],[465890,"K+T"],[465898,"REF"],[465926,"AS"],[465927,"AS"],[465941,"K+T"],[465961,"K+T"],[465967,"REF"],[465985,"K+T"],[465996,"K+T"],[465997,"K+T"],[466009,"K+T"],[466014,"K+T"],[466051,"K+T"],[466052,"K+T"],[466059,"K+T"],[466109,"K+T"],[466173,"K+T"],[466252,"K+T"],[466253,"REF"],[466320,"REF"],[466321,"REF"],[466429,"REF"],[466477,"K+T"],[466553,"K+T"],[466586,"K+T"],[466686,"K+T"],[466690,"K+T"],[466695,"K+T"],[466780,"K+T"],[466880,"REF"],[466973,"K+T"],[467011,"REF"],[467040,"K+T"],[467107,"K+T"],[467127,"REF"],[467171,"K+T"],[467195,"K+T"],[467219,"K+T"],[467283,"REF"],[467316,"K+T"],[467318,"K+T"],[467324,"REF"],[467326,"K+T"],[467347,"K+T"],[467389,"K+T"],[467451,"REF"],[467461,"REF"],[467467,"REF"],[467468,"REF"],[467492,"K+T"],[467543,"K+T"],[467561,"K+T"],[467633,"K+T"],[467677,"K+T"],[467723,"K+T"],[467851,"K+T"],[467877,"K+T"],[467936,"K+T"],[468008,"REF"],[468111,"REF"],[468151,"REF"],[468152,"REF"],[468183,"REF"],[468194,"K+T"],[468282,"REF"],[468290,"REF"],[468327,"K+T"],[468333,"K+T"],[468361,"K+T"],[468362,"REF"],[468376,"K+T"],[468418,"K+T"],[468434,"REF"],[468439,"K+T"],[468466,"K+T"],[468471,"REF"],[468479,"K+T"],[468593,"REF"],[468613,"K+T"],[468620,"K+T"],[468694,"K+T"],[468702,"K+T"],[468723,"K+T"],[468752,"K+T"],[468858,"K+T"],[468877,"K+T"],[469021,"K+T"],[469090,"K+T"],[469103,"REF"],[469104,"REF"],[469106,"AS"],[469113,"REF"],[469124,"K+T"],[469232,"REF"],[469327,"K+T"],[469342,"K+T"],[469381,"K+T"],[469505,"K+T"],[469523,"K+T"],[469535,"K+T"],[469543,"K+T"],[469544,"K+T"],[469659,"K+T"],[469748,"K+T"],[469752,"AS"],[469830,"REF"],[469846,"AS"],[469867,"K+T"],[469869,"K+T"],[469870,"K+T"],[469888,"K+T"],[469908,"K+T"],[469926,"K+T"],[469928,"K+T"],[469946,"K+T"],[469956,"K+T"],[470004,"AS"],[470064,"K+T"],[470076,"K+T"],[470079,"K+T"],[470087,"K+T"],[470125,"REF"],[470152,"K+T"],[470246,"REF"],[470263,"K+T"],[470324,"K+T"],[470338,"K+T"],[470349,"K+T"],[470351,"K+T"],[470374,"K+T"],[470516,"K+T"],[470558,"K+T"],[470565,"K+T"],[470574,"K+T"],[470594,"K+T"],[470638,"K+T"],[470647,"K+T"],[470716,"K+T"],[470734,"K+T"],[470762,"AS"],[470818,"K+T"],[470820,"K+T"],[470845,"K+T"],[470896,"K+T"],[470908,"K+T"],[470928,"REF"],[470950,"K+T"],[470961,"REF"],[470996,"K+T"],[470998,"K+T"],[471057,"OTROS"],[471084,"K+T"],[471133,"K+T"],[471150,"K+T"],[471171,"REF"],[471209,"K+T"],[471228,"REF"],[471234,"K+T"],[471239,"REF"],[471299,"K+T"],[471303,"AS"],[471323,"K+T"],[471333,"REF"],[471335,"K+T"],[471346,"K+T"],[471368,"K+T"],[471377,"K+T"],[471380,"K+T"],[471381,"K+T"],[471391,"K+T"],[471409,"K+T"],[471525,"AS"],[471534,"K+T"],[471535,"K+T"],[471537,"K+T"],[471539,"K+T"],[471581,"REF"],[471587,"AS"],[471591,"K+T"],[471600,"K+T"],[471610,"K+T"],[471630,"K+T"],[471697,"REF"],[471718,"K+T"],[471770,"K+T"],[471771,"K+T"],[471984,"K+T"],[472005,"REF"],[472055,"K+T"],[472075,"K+T"],[472079,"K+T"],[472094,"K+T"],[472101,"K+T"],[472126,"K+T"],[472220,"AS"],[472264,"K+T"],[472286,"REF"],[472314,"K+T"],[472345,"K+T"],[472408,"K+T"],[472410,"K+T"],[472412,"K+T"],[472415,"K+T"],[472424,"REF"],[472464,"K+T"],[472467,"K+T"],[472475,"K+T"],[472476,"K+T"],[472483,"K+T"],[472490,"K+T"],[472514,"REF"],[472561,"K+T"],[472569,"K+T"],[472612,"K+T"],[472633,"K+T"],[472727,"K+T"],[472823,"K+T"],[472854,"K+T"],[472867,"K+T"],[472905,"K+T"],[472932,"K+T"],[472935,"K+T"],[472974,"K+T"],[473049,"REF"],[473050,"K+T"],[473064,"REF"],[473065,"REF"],[473066,"REF"],[473089,"K+T"],[473091,"K+T"],[473116,"K+T"],[508680,"SIN CLASIF"],[554525,"SIN CLASIF"],[567929,"OTROS"],[660222,"K+T"],[660229,"K+T"],[660258,"K+T"],[661034,"K+T"],[661073,"K+T"],[661081,"K+T"],[661085,"K+T"],[661141,"K+T"],[661171,"K+T"],[661191,"REF"],[661201,"K+T"],[661208,"K+T"],[661257,"K+T"],[661366,"K+T"],[662016,"K+T"],[662044,"K+T"],[662068,"REF"],[662080,"REF"],[662089,"REF"],[662209,"REF"],[662845,"K+T"],[663024,"K+T"],[663101,"K+T"],[663107,"K+T"],[663166,"K+T"],[663179,"K+T"],[663214,"K+T"],[663529,"K+T"],[663574,"K+T"],[664044,"K+T"],[664065,"K+T"],[664066,"K+T"],[664072,"AS"],[664109,"K+T"],[664136,"K+T"],[664141,"K+T"],[664311,"K+T"],[664343,"K+T"],[664351,"K+T"],[664607,"K+T"],[664678,"K+T"],[664685,"K+T"],[665064,"K+T"],[665108,"K+T"],[665251,"REF"],[665330,"K+T"],[665343,"K+T"],[665420,"K+T"],[665441,"K+T"],[665452,"K+T"],[665471,"K+T"],[665619,"K+T"],[665711,"K+T"],[665732,"K+T"],[665818,"K+T"],[665831,"K+T"],[665960,"K+T"],[666006,"K+T"],[666011,"K+T"],[666027,"K+T"],[666064,"K+T"],[666071,"K+T"],[666109,"K+T"],[666123,"K+T"],[666136,"K+T"],[666146,"K+T"],[666148,"K+T"],[666149,"K+T"],[666176,"K+T"],[666177,"K+T"],[666217,"K+T"],[666254,"K+T"],[666275,"AS"],[666354,"K+T"],[666408,"K+T"],[666412,"K+T"],[666426,"REF"],[666500,"K+T"],[666533,"K+T"],[666536,"REF"],[666576,"K+T"],[666863,"MAY"],[671020,"K+T"],[671021,"REF"],[671029,"K+T"],[671120,"K+T"],[672062,"K+T"],[672088,"K+T"],[673077,"K+T"],[673100,"K+T"],[673105,"K+T"],[674013,"K+T"],[674017,"K+T"],[674027,"K+T"],[674032,"K+T"],[674037,"K+T"],[674038,"K+T"],[674063,"K+T"],[674065,"K+T"],[674102,"K+T"],[674148,"K+T"],[710014,"K+T"],[710017,"K+T"],[710027,"K+T"],[710046,"K+T"],[710079,"K+T"],[710117,"K+T"],[710187,"K+T"],[720028,"K+T"],[720029,"K+T"],[720059,"K+T"],[720066,"K+T"],[720074,"K+T"],[720089,"K+T"],[720116,"K+T"],[720137,"K+T"],[720179,"K+T"],[720199,"K+T"],[720212,"K+T"],[730016,"K+T"],[730034,"K+T"],[730055,"K+T"],[730063,"K+T"],[730072,"K+T"],[730127,"K+T"],[730134,"K+T"],[730138,"K+T"],[800000,"OTROS"],[800001,"OTROS"],[800002,"OTROS"],[800003,"OTROS"],[800004,"OTROS"],[800005,"OTROS"],[800006,"OTROS"],[800007,"OTROS"],[800008,"OTROS"],[800009,"OTROS"],[800010,"OTROS"],[800011,"OTROS"],[800012,"OTROS"],[800013,"OTROS"],[800014,"OTROS"],[800015,"OTROS"],[800016,"OTROS"],[800017,"OTROS"],[800018,"OTROS"],[800019,"OTROS"],[800020,"OTROS"],[800021,"OTROS"],[800022,"OTROS"],[800023,"OTROS"],[800024,"OTROS"],[800025,"OTROS"],[800026,"OTROS"],[800027,"OTROS"],[800028,"OTROS"],[800029,"OTROS"],[910036,"OTROS"],[911154,"OTROS"],[911155,"OTROS"],[911156,"OTROS"],[911157,"OTROS"],[911158,"OTROS"],[911159,"OTROS"],[911172,"OTROS"],[911176,"OTROS"],[911178,"K+T"],[911179,"K+T"],[911180,"K+T"],[911181,"K+T"],[911183,"K+T"],[911186,"K+T"],[911187,"K+T"],[911188,"K+T"],[911190,"REF"],[911191,"REF"],[911192,"K+T"],[911194,"K+T"],[911195,"K+T"],[911196,"K+T"],[911198,"K+T"],[911201,"K+T"],[911202,"K+T"],[911205,"REF"],[911208,"REF"],[911210,"K+T"],[911211,"K+T"],[911212,"K+T"],[911213,"K+T"],[911215,"K+T"],[911216,"K+T"],[911217,"K+T"],[911220,"K+T"],[911221,"K+T"],[911224,"REF"],[911225,"K+T"],[911227,"REF"],[911228,"K+T"],[911229,"REF"],[911230,"K+T"],[911231,"K+T"],[911232,"REF"],[911233,"K+T"],[911235,"K+T"],[911237,"K+T"],[911238,"REF"],[911240,"K+T"],[911241,"AS"],[911242,"K+T"],[911244,"K+T"],[911245,"K+T"],[911251,"K+T"],[911257,"K+T"],[911258,"REF"],[911259,"K+T"],[911260,"K+T"],[911262,"K+T"],[911263,"K+T"],[911265,"REF"],[911266,"K+T"],[911268,"K+T"],[911271,"K+T"],[911272,"K+T"],[911277,"K+T"],[911281,"K+T"],[911282,"K+T"],[911286,"K+T"],[911287,"K+T"],[911288,"REF"],[911289,"K+T"],[911290,"K+T"],[911291,"K+T"],[911292,"K+T"],[911295,"K+T"],[911296,"K+T"],[911297,"K+T"],[911298,"K+T"],[911299,"K+T"],[911300,"K+T"],[911301,"K+T"],[911302,"K+T"],[911303,"K+T"],[911305,"REF"],[911306,"REF"],[911307,"K+T"],[911308,"K+T"],[911309,"REF"],[911311,"K+T"],[911312,"K+T"],[911313,"K+T"],[911314,"K+T"],[911315,"K+T"],[911317,"K+T"],[911318,"K+T"],[911320,"K+T"],[911321,"K+T"],[911323,"K+T"],[911326,"K+T"],[911331,"K+T"],[911333,"K+T"],[911335,"K+T"],[911338,"K+T"],[911339,"K+T"],[911340,"K+T"],[911341,"K+T"],[911342,"K+T"],[911344,"K+T"],[911345,"REF"],[911346,"REF"],[911347,"K+T"],[911348,"K+T"],[911349,"K+T"],[911351,"K+T"],[911354,"K+T"],[911355,"K+T"],[911356,"K+T"],[911357,"K+T"],[911358,"K+T"],[911359,"K+T"],[911361,"REF"],[911362,"REF"],[911365,"K+T"],[911368,"REF"],[911371,"K+T"],[911372,"K+T"],[911373,"K+T"],[911374,"K+T"],[911375,"K+T"],[911376,"K+T"],[911377,"K+T"],[911381,"K+T"],[911382,"REF"],[911384,"K+T"],[911385,"K+T"],[911386,"K+T"],[911388,"K+T"],[911389,"REF"],[911391,"K+T"],[911392,"K+T"],[911393,"K+T"],[911395,"K+T"],[911396,"K+T"],[911397,"K+T"],[911400,"K+T"],[911401,"K+T"],[911402,"K+T"],[911403,"K+T"],[911404,"REF"],[911407,"K+T"],[911408,"K+T"],[911409,"K+T"],[911410,"K+T"],[911414,"REF"],[911415,"K+T"],[911419,"K+T"],[911420,"K+T"],[911421,"K+T"],[911424,"K+T"],[911427,"K+T"],[911429,"K+T"],[911430,"K+T"],[911431,"K+T"],[911433,"K+T"],[911435,"K+T"],[911440,"MAY"],[911443,"K+T"],[911444,"K+T"],[911445,"K+T"],[911447,"K+T"],[911449,"K+T"],[911450,"K+T"],[911452,"REF"],[911453,"K+T"],[911455,"K+T"],[911456,"K+T"],[911459,"K+T"],[911460,"K+T"],[911461,"REF"],[911466,"K+T"],[911467,"K+T"],[911468,"K+T"],[911469,"K+T"],[911470,"K+T"],[911471,"K+T"],[911472,"K+T"],[911473,"K+T"],[911475,"AS"],[911476,"K+T"],[911477,"REF"],[911478,"K+T"],[911479,"K+T"],[911480,"K+T"],[911481,"REF"],[911482,"K+T"],[911484,"K+T"],[911487,"K+T"],[911491,"K+T"],[911492,"K+T"],[911494,"K+T"],[911495,"K+T"],[911496,"K+T"],[911497,"K+T"],[911500,"K+T"],[911502,"K+T"],[911503,"K+T"],[911506,"K+T"],[911507,"K+T"],[911508,"K+T"],[911509,"K+T"],[911511,"K+T"],[911512,"K+T"],[911514,"K+T"],[911515,"K+T"],[911517,"K+T"],[911520,"K+T"],[911521,"MAY"],[911522,"K+T"],[911523,"REF"],[911524,"K+T"],[911526,"K+T"],[911527,"K+T"],[911528,"K+T"],[911530,"REF"],[911532,"K+T"],[911533,"K+T"],[911535,"K+T"],[911537,"REF"],[911538,"REF"],[911539,"REF"],[911540,"K+T"],[911545,"K+T"],[911546,"K+T"],[911549,"K+T"],[911554,"K+T"],[911555,"REF"],[911556,"K+T"],[911560,"K+T"],[911561,"REF"],[911563,"K+T"],[911564,"K+T"],[911565,"K+T"],[911566,"K+T"],[911567,"K+T"],[911568,"REF"],[911569,"K+T"],[911570,"K+T"],[911571,"K+T"],[911572,"K+T"],[911574,"REF"],[911577,"REF"],[911578,"K+T"],[911579,"MAY"],[911580,"K+T"],[911585,"K+T"],[911586,"K+T"],[911587,"K+T"],[911588,"REF"],[911590,"REF"],[911592,"REF"],[911593,"K+T"],[911596,"K+T"],[911597,"K+T"],[911600,"K+T"],[911601,"K+T"],[911603,"REF"],[911605,"K+T"],[911607,"K+T"],[911608,"K+T"],[911610,"REF"],[911611,"K+T"],[911612,"K+T"],[911613,"K+T"],[911615,"K+T"],[911618,"K+T"],[911619,"K+T"],[911621,"REF"],[911622,"REF"],[911624,"REF"],[911625,"K+T"],[911626,"REF"],[911627,"REF"],[911629,"K+T"],[911630,"REF"],[911634,"K+T"],[911635,"K+T"],[911636,"K+T"],[911639,"K+T"],[911641,"K+T"],[911643,"K+T"],[911644,"K+T"],[911645,"K+T"],[911646,"REF"],[911648,"REF"],[911649,"REF"],[911653,"REF"],[911655,"K+T"],[911656,"K+T"],[911658,"K+T"],[911660,"K+T"],[911662,"REF"],[911665,"K+T"],[911667,"K+T"],[911668,"K+T"],[911669,"REF"],[911672,"REF"],[911677,"REF"],[911679,"REF"],[911681,"REF"],[911683,"K+T"],[911685,"K+T"],[911686,"K+T"],[911687,"K+T"],[911690,"REF"],[911691,"REF"],[911694,"K+T"],[911696,"K+T"],[911697,"K+T"],[911699,"K+T"],[911700,"K+T"],[911701,"REF"],[911702,"K+T"],[911705,"REF"],[911706,"REF"],[911708,"K+T"],[911709,"K+T"],[911710,"REF"],[911711,"REF"],[911715,"K+T"],[911716,"K+T"],[911717,"K+T"],[911718,"REF"],[911719,"K+T"],[911720,"REF"],[911722,"K+T"],[911723,"K+T"],[911724,"K+T"],[911726,"K+T"],[911727,"K+T"],[911728,"K+T"],[911729,"REF"],[911730,"REF"],[911731,"REF"],[911733,"REF"],[911735,"REF"],[911736,"K+T"],[911740,"K+T"],[911742,"K+T"],[911744,"K+T"],[911747,"K+T"],[911748,"K+T"],[911749,"K+T"],[911750,"K+T"],[911751,"K+T"],[911752,"K+T"],[911753,"K+T"],[911754,"K+T"],[911756,"K+T"],[911758,"REF"],[911759,"K+T"],[911760,"REF"],[911761,"K+T"],[911762,"REF"],[911763,"REF"],[911766,"REF"],[911767,"K+T"],[911768,"K+T"],[911769,"K+T"],[911770,"REF"],[911772,"K+T"],[911773,"REF"],[911774,"REF"],[911775,"REF"],[911776,"K+T"],[911779,"K+T"],[911780,"REF"],[911781,"REF"],[911782,"K+T"],[911783,"REF"],[911785,"K+T"],[911786,"K+T"],[911787,"K+T"],[911790,"K+T"],[911792,"K+T"],[911794,"REF"],[911795,"K+T"],[911796,"K+T"],[911797,"REF"],[911798,"REF"],[911799,"K+T"],[911800,"REF"],[911802,"K+T"],[911803,"K+T"],[911804,"K+T"],[911809,"REF"],[911810,"AS"],[911811,"K+T"],[911812,"REF"],[911814,"K+T"],[911815,"REF"],[911816,"K+T"],[911817,"REF"],[911818,"K+T"],[911819,"K+T"],[911821,"K+T"],[911822,"K+T"],[911825,"K+T"],[911827,"K+T"],[911828,"K+T"],[911830,"K+T"],[911831,"K+T"],[911832,"K+T"],[911833,"K+T"],[911834,"K+T"],[911835,"K+T"],[911836,"K+T"],[911837,"K+T"],[911838,"K+T"],[911839,"K+T"],[911840,"K+T"],[911841,"K+T"],[911843,"K+T"],[911844,"K+T"],[911845,"K+T"],[911847,"K+T"],[911848,"K+T"],[911849,"K+T"],[911850,"K+T"],[911851,"K+T"],[911852,"K+T"],[911853,"K+T"],[911854,"K+T"],[911855,"K+T"],[911856,"K+T"],[911857,"K+T"],[911858,"K+T"],[911860,"K+T"],[911861,"K+T"],[911862,"K+T"],[911864,"K+T"],[911865,"K+T"],[911866,"K+T"],[911867,"REF"],[911869,"REF"],[911870,"K+T"],[911871,"K+T"],[911872,"AS"],[911875,"K+T"],[911876,"K+T"],[911877,"K+T"],[911878,"K+T"],[911880,"K+T"],[911881,"MAY"],[911883,"K+T"],[911884,"K+T"],[911885,"REF"],[911886,"K+T"],[911887,"K+T"],[911889,"K+T"],[911890,"K+T"],[911891,"K+T"],[911892,"REF"],[911893,"REF"],[911896,"K+T"],[911897,"K+T"],[911898,"K+T"],[911900,"REF"],[911901,"K+T"],[911903,"K+T"],[911904,"K+T"],[911905,"K+T"],[911906,"K+T"],[911907,"K+T"],[911908,"K+T"],[911909,"K+T"],[911910,"K+T"],[911911,"K+T"],[911912,"K+T"],[911913,"REF"],[911914,"K+T"],[911915,"K+T"],[911916,"K+T"],[911917,"K+T"],[911919,"REF"],[911920,"K+T"],[911922,"K+T"],[911924,"K+T"],[911925,"K+T"],[911926,"K+T"],[911928,"K+T"],[911929,"K+T"],[911930,"K+T"],[911931,"K+T"],[911932,"K+T"],[911935,"K+T"],[911938,"K+T"],[911939,"K+T"],[911940,"K+T"],[911941,"K+T"],[911942,"K+T"],[911943,"K+T"],[911944,"K+T"],[911945,"K+T"],[911947,"K+T"],[911949,"K+T"],[911950,"K+T"],[911951,"K+T"],[911953,"K+T"],[911954,"K+T"],[911955,"K+T"],[911957,"K+T"],[911959,"K+T"],[911960,"K+T"],[911962,"K+T"],[911963,"K+T"],[911966,"K+T"],[911967,"K+T"],[911968,"K+T"],[911969,"K+T"],[911970,"REF"],[911971,"REF"],[911972,"REF"],[911973,"REF"],[911974,"REF"],[911976,"K+T"],[911977,"K+T"],[911978,"K+T"],[911979,"MAY"],[911980,"K+T"],[911981,"K+T"],[911982,"REF"],[911984,"K+T"],[911985,"K+T"],[911986,"K+T"],[911988,"K+T"],[911989,"K+T"],[911990,"K+T"],[911994,"K+T"],[911995,"K+T"],[911996,"K+T"],[911998,"K+T"],[911999,"K+T"],[912000,"K+T"],[912001,"K+T"],[912002,"K+T"],[912003,"K+T"],[912004,"K+T"],[912005,"K+T"],[912006,"REF"],[912007,"REF"],[912008,"REF"],[912009,"K+T"],[912010,"K+T"],[912011,"REF"],[912012,"REF"],[912013,"K+T"],[912014,"K+T"],[912015,"K+T"],[912016,"REF"],[912019,"REF"],[912020,"REF"],[912022,"K+T"],[912023,"K+T"],[912024,"K+T"],[912025,"K+T"],[912027,"K+T"],[912028,"K+T"],[912030,"REF"],[912032,"REF"],[912033,"REF"],[912034,"K+T"],[912035,"REF"],[912036,"K+T"],[912038,"K+T"],[912039,"MAY"],[912040,"K+T"],[912041,"REF"],[912043,"K+T"],[912044,"K+T"],[912045,"REF"],[912046,"AS"],[912047,"REF"],[912048,"K+T"],[912049,"REF"],[912050,"K+T"],[912051,"K+T"],[912053,"K+T"],[912054,"K+T"],[912055,"K+T"],[912056,"REF"],[912058,"K+T"],[912059,"K+T"],[912062,"K+T"],[912065,"REF"],[912066,"K+T"],[912067,"REF"],[912068,"K+T"],[912069,"K+T"],[912070,"REF"],[912071,"K+T"],[912072,"REF"],[912073,"REF"],[912075,"K+T"],[912077,"REF"],[912078,"K+T"],[912079,"K+T"],[912080,"K+T"],[912081,"K+T"],[912082,"K+T"],[912083,"K+T"],[912084,"K+T"],[912085,"K+T"],[912087,"K+T"],[912088,"K+T"],[912091,"REF"],[912092,"REF"],[912094,"REF"],[912095,"K+T"],[912096,"REF"],[912097,"REF"],[912098,"REF"],[912099,"REF"],[912100,"REF"],[912101,"K+T"],[912102,"K+T"],[912103,"K+T"],[912104,"K+T"],[912105,"REF"],[912107,"K+T"],[912108,"K+T"],[912109,"K+T"],[912110,"K+T"],[912111,"REF"],[912112,"K+T"],[912114,"K+T"],[912116,"AS"],[912117,"K+T"],[912118,"K+T"],[912119,"K+T"],[912120,"K+T"],[912121,"K+T"],[912122,"K+T"],[912123,"K+T"],[912125,"K+T"],[912128,"K+T"],[912129,"REF"],[912130,"REF"],[912131,"K+T"],[912133,"K+T"],[912134,"K+T"],[912137,"K+T"],[912138,"K+T"],[912139,"K+T"],[912140,"K+T"],[912141,"K+T"],[912142,"K+T"],[912143,"K+T"],[912146,"K+T"],[912147,"REF"],[912148,"REF"],[912149,"K+T"],[912150,"SIN CLASIF"],[912151,"K+T"],[912152,"AS"],[912153,"K+T"],[912154,"K+T"],[912155,"REF"],[912156,"REF"],[912157,"REF"],[912158,"K+T"],[912159,"K+T"],[912160,"REF"],[912161,"K+T"],[912162,"REF"],[912163,"K+T"],[912167,"K+T"],[912168,"K+T"],[912170,"REF"],[912171,"REF"],[912172,"K+T"],[912174,"K+T"],[912175,"K+T"],[912177,"REF"],[912178,"REF"],[912179,"K+T"],[912180,"REF"],[912182,"K+T"],[912184,"K+T"],[912187,"REF"],[912188,"K+T"],[912189,"K+T"],[912191,"K+T"],[912192,"REF"],[912193,"K+T"],[912194,"K+T"],[912195,"K+T"],[912197,"REF"],[912198,"K+T"],[912200,"K+T"],[912203,"K+T"],[912204,"AS"],[912205,"K+T"],[912206,"K+T"],[912207,"K+T"],[912209,"K+T"],[912210,"K+T"],[912212,"K+T"],[912213,"K+T"],[912214,"K+T"],[912215,"K+T"],[912216,"K+T"],[912217,"K+T"],[912218,"K+T"],[912219,"K+T"],[912220,"K+T"],[912221,"K+T"],[912222,"K+T"],[912223,"K+T"],[912224,"REF"],[912225,"K+T"],[912226,"K+T"],[912227,"REF"],[912228,"REF"],[912229,"K+T"],[912230,"K+T"],[912231,"K+T"],[912232,"K+T"],[912233,"K+T"],[912234,"K+T"],[912235,"K+T"],[912236,"K+T"],[912237,"REF"],[912238,"REF"],[912239,"K+T"],[912240,"K+T"],[912241,"REF"],[912242,"REF"],[912243,"K+T"],[912244,"K+T"],[912245,"REF"],[912246,"K+T"],[912247,"K+T"],[912248,"K+T"],[912249,"K+T"],[912250,"K+T"],[912251,"K+T"],[912252,"K+T"],[912253,"K+T"],[912254,"K+T"],[912255,"K+T"],[912256,"K+T"],[912257,"AS"],[912258,"K+T"],[912260,"K+T"],[912261,"AS"],[912263,"K+T"],[912264,"K+T"],[912265,"K+T"],[912266,"K+T"],[912267,"K+T"],[912269,"K+T"],[912272,"K+T"],[912273,"K+T"],[912274,"K+T"],[912275,"K+T"],[912276,"REF"],[912277,"REF"],[912279,"K+T"],[912280,"K+T"],[912281,"K+T"],[912283,"REF"],[912284,"K+T"],[912285,"K+T"],[912286,"K+T"],[912287,"K+T"],[912288,"REF"],[912290,"K+T"],[912291,"K+T"],[912292,"K+T"],[912293,"REF"],[912294,"REF"],[912295,"REF"],[912296,"REF"],[912297,"K+T"],[912298,"K+T"],[912299,"K+T"],[912300,"K+T"],[912301,"K+T"],[912303,"K+T"],[912304,"K+T"],[912305,"K+T"],[912306,"AS"],[912307,"K+T"],[912308,"K+T"],[912309,"K+T"],[912310,"K+T"],[912311,"K+T"],[912313,"K+T"],[912314,"K+T"],[912315,"K+T"],[912316,"K+T"],[912317,"K+T"],[912318,"K+T"],[912319,"K+T"],[912320,"K+T"],[912321,"K+T"],[912322,"K+T"],[912323,"REF"],[912324,"K+T"],[912325,"K+T"],[912326,"REF"],[912327,"K+T"],[912328,"K+T"],[912329,"K+T"],[912330,"K+T"],[912331,"K+T"],[912332,"REF"],[912333,"K+T"],[912334,"REF"],[912335,"K+T"],[912336,"K+T"],[912337,"K+T"],[912338,"AS"],[912339,"K+T"],[912340,"K+T"],[912341,"REF"],[912342,"REF"],[912343,"K+T"],[912344,"K+T"],[912345,"K+T"],[912347,"K+T"],[912348,"K+T"],[912350,"K+T"],[912351,"K+T"],[912352,"K+T"],[912354,"K+T"],[912355,"K+T"],[912356,"K+T"],[912357,"REF"],[912358,"REF"],[912359,"K+T"],[912360,"K+T"],[912361,"REF"],[912362,"REF"],[912363,"REF"],[912364,"K+T"],[912365,"K+T"],[912366,"K+T"],[912367,"K+T"],[912368,"K+T"],[912369,"REF"],[912370,"REF"],[912371,"REF"],[912372,"K+T"],[912373,"K+T"],[912374,"K+T"],[912375,"K+T"],[912377,"K+T"],[912378,"K+T"],[912379,"K+T"],[912380,"K+T"],[912381,"K+T"],[912382,"K+T"],[912384,"K+T"],[912385,"K+T"],[912386,"K+T"],[912387,"K+T"],[912388,"K+T"],[912389,"K+T"],[912391,"K+T"],[912392,"K+T"],[912393,"K+T"],[912394,"K+T"],[912395,"REF"],[912396,"AS"],[912397,"REF"],[912398,"K+T"],[912400,"K+T"],[912401,"K+T"],[912402,"K+T"],[912403,"K+T"],[912404,"K+T"],[912405,"K+T"],[912406,"K+T"],[912407,"K+T"],[912408,"K+T"],[912409,"K+T"],[912410,"K+T"],[912411,"K+T"],[912412,"K+T"],[912413,"REF"],[912414,"K+T"],[912415,"K+T"],[912416,"K+T"],[912417,"K+T"],[912418,"K+T"],[912419,"REF"],[912420,"REF"],[912421,"REF"],[912422,"K+T"],[912423,"K+T"],[912424,"K+T"],[912425,"K+T"],[912426,"K+T"],[912427,"K+T"],[912428,"K+T"],[912429,"K+T"],[912430,"K+T"],[912432,"REF"],[912433,"K+T"],[912434,"K+T"],[912435,"K+T"],[912436,"REF"],[912437,"AS"],[912438,"K+T"],[912439,"K+T"],[912440,"K+T"],[912441,"K+T"],[912442,"K+T"],[912443,"K+T"],[912444,"REF"],[912445,"K+T"],[912446,"K+T"],[912447,"K+T"],[912448,"K+T"],[912449,"REF"],[912450,"REF"],[912451,"K+T"],[912452,"K+T"],[912453,"K+T"],[912454,"K+T"],[912455,"K+T"],[912456,"K+T"],[912457,"K+T"],[912458,"K+T"],[912459,"K+T"],[912460,"K+T"],[912461,"K+T"],[912462,"REF"],[912463,"REF"],[912464,"REF"],[912465,"REF"],[912466,"K+T"],[912467,"K+T"],[912468,"K+T"],[912470,"K+T"],[912471,"SIN CLASIF"],[912472,"AS"],[912473,"K+T"],[912475,"K+T"],[912476,"K+T"],[912477,"K+T"],[912478,"REF"],[912479,"REF"],[912480,"REF"],[912481,"K+T"],[912482,"K+T"],[912483,"K+T"],[912484,"K+T"],[912485,"K+T"],[912486,"REF"],[912487,"K+T"],[912488,"K+T"],[912489,"K+T"],[912490,"K+T"],[912491,"K+T"],[912492,"K+T"],[912493,"K+T"],[912494,"REF"],[912495,"REF"],[912497,"K+T"],[912498,"K+T"],[912499,"K+T"],[912500,"K+T"],[912501,"K+T"],[912502,"K+T"],[912503,"K+T"],[912504,"K+T"],[912505,"K+T"],[912506,"K+T"],[912507,"K+T"],[912508,"K+T"],[912509,"K+T"],[912510,"K+T"],[912511,"REF"],[912512,"REF"],[912513,"K+T"],[912514,"K+T"],[912515,"K+T"],[912516,"AS"],[912517,"K+T"],[912519,"K+T"],[912520,"K+T"],[912521,"K+T"],[912522,"AS"],[912523,"K+T"],[912524,"REF"],[912525,"K+T"],[912526,"K+T"],[912527,"REF"],[912528,"REF"],[912529,"K+T"],[912530,"K+T"],[912531,"K+T"],[912532,"K+T"],[912533,"K+T"],[912534,"K+T"],[912535,"K+T"],[912536,"K+T"],[912537,"K+T"],[912538,"K+T"],[912539,"K+T"],[912540,"K+T"],[912541,"K+T"],[912542,"K+T"],[912543,"K+T"],[912544,"K+T"],[912545,"REF"],[912546,"K+T"],[912547,"K+T"],[912548,"K+T"],[912549,"K+T"],[912550,"K+T"],[912551,"K+T"],[912552,"K+T"],[912553,"K+T"],[912554,"K+T"],[912555,"K+T"],[912556,"K+T"],[912557,"K+T"],[912558,"K+T"],[912559,"REF"],[912560,"K+T"],[912561,"K+T"],[912562,"K+T"],[912563,"K+T"],[912564,"K+T"],[912565,"REF"],[912566,"REF"],[912567,"K+T"],[912568,"K+T"],[912569,"K+T"],[912570,"AS"],[912572,"K+T"],[912573,"K+T"],[912574,"K+T"],[912575,"K+T"],[912576,"K+T"],[912577,"K+T"],[912578,"REF"],[912579,"REF"],[912580,"K+T"],[912581,"K+T"],[912582,"K+T"],[912583,"K+T"],[912584,"K+T"],[912585,"K+T"],[912586,"K+T"],[912587,"K+T"],[912588,"K+T"],[912589,"K+T"],[912590,"REF"],[912591,"K+T"],[912592,"K+T"],[912593,"K+T"],[912594,"K+T"],[912595,"K+T"],[912596,"REF"],[912597,"K+T"],[912598,"K+T"],[912600,"K+T"],[912601,"K+T"],[912602,"K+T"],[912603,"K+T"],[912604,"K+T"],[912605,"REF"],[912606,"K+T"],[912607,"K+T"],[912608,"K+T"],[912609,"K+T"],[912610,"K+T"],[912611,"K+T"],[912612,"K+T"],[912613,"K+T"],[912614,"K+T"],[912615,"K+T"],[912616,"K+T"],[912617,"K+T"],[912618,"K+T"],[912619,"K+T"],[912620,"K+T"],[912621,"K+T"],[912622,"K+T"],[912623,"K+T"],[912624,"K+T"],[912625,"REF"],[912626,"K+T"],[912627,"K+T"],[912628,"K+T"],[912629,"K+T"],[912630,"K+T"],[912631,"K+T"],[912632,"K+T"],[912633,"REF"],[912634,"K+T"],[912635,"K+T"],[912636,"K+T"],[912637,"K+T"],[912638,"K+T"],[912639,"K+T"],[912640,"K+T"],[912641,"K+T"],[912642,"K+T"],[912643,"K+T"],[912644,"REF"],[912645,"REF"],[912646,"REF"],[912647,"REF"],[912648,"K+T"],[912649,"K+T"],[912650,"K+T"],[912651,"K+T"],[912652,"REF"],[912653,"K+T"],[912654,"K+T"],[912655,"K+T"],[912656,"K+T"],[912657,"K+T"],[912658,"K+T"],[912659,"K+T"],[912660,"REF"],[912661,"K+T"],[912662,"K+T"],[912663,"K+T"],[912664,"REF"],[912665,"K+T"],[912666,"K+T"],[912667,"REF"],[912669,"K+T"],[912670,"K+T"],[912671,"K+T"],[912672,"K+T"],[912673,"K+T"],[912674,"REF"],[912675,"K+T"],[912676,"K+T"],[912677,"K+T"],[912678,"K+T"],[912679,"K+T"],[912680,"REF"],[912681,"K+T"],[912682,"K+T"],[912683,"K+T"],[912684,"K+T"],[912685,"K+T"],[912686,"K+T"],[912687,"K+T"],[912688,"K+T"],[912689,"K+T"],[912690,"K+T"],[912691,"K+T"],[912692,"K+T"],[912693,"K+T"],[912694,"K+T"],[912695,"K+T"],[912696,"K+T"],[912697,"K+T"],[912698,"K+T"],[912699,"K+T"],[912700,"K+T"],[912701,"K+T"],[912702,"K+T"],[912703,"K+T"],[912704,"REF"],[912705,"K+T"],[912706,"K+T"],[912707,"K+T"],[912708,"K+T"],[912709,"K+T"],[912710,"K+T"],[912711,"K+T"],[912712,"K+T"],[912713,"K+T"],[912714,"K+T"],[912715,"K+T"],[912716,"K+T"],[912717,"K+T"],[912718,"K+T"],[912719,"K+T"],[912720,"K+T"],[912721,"K+T"],[912722,"K+T"],[912723,"K+T"],[912724,"MAY"],[912725,"K+T"],[912726,"K+T"],[912727,"K+T"],[912728,"K+T"],[912729,"K+T"],[912730,"K+T"],[912731,"K+T"],[912732,"K+T"],[912733,"K+T"],[912734,"K+T"],[912735,"K+T"],[912736,"K+T"],[912737,"K+T"],[912738,"K+T"],[912739,"K+T"],[912740,"K+T"],[912741,"K+T"],[912742,"K+T"],[912743,"K+T"],[912744,"K+T"],[912745,"K+T"],[912746,"K+T"],[912747,"K+T"],[912748,"K+T"],[912749,"K+T"],[912750,"K+T"],[912751,"K+T"],[912752,"K+T"],[912753,"K+T"],[912755,"K+T"],[912756,"K+T"],[912757,"MAY"],[912758,"REF"],[912759,"SIN CLASIF"],[912760,"K+T"],[912761,"K+T"],[912762,"K+T"],[912763,"K+T"],[912764,"K+T"],[912765,"K+T"],[912766,"K+T"],[912767,"K+T"],[912768,"K+T"],[912769,"K+T"],[912770,"K+T"],[912771,"K+T"],[912772,"K+T"],[912773,"K+T"],[912774,"K+T"],[912775,"K+T"]];
+const CLIENTS_CANAL_MAP = new Map(CLIENTS_CANAL.map(c => [c[0], c[1]]));
+const CANAL_LABELS = { 'REF':'Refrigerado / Gastronomía', 'OTROS':'Otros', 'MAY':'Mayorista', 'AS':'Autoservicio', 'K+T':'Kiosco + Tradicional', 'SIN CLASIF':'Sin clasificar' };
+const CANAL_ORDER = ['REF','K+T','AS','MAY','OTROS','SIN CLASIF'];
+
+/* columnas (0-based) del export de ventas tipo "perforaciones.xlsx" */
+const COL = { FECHA:2, COD_CLIENTE:4, CLIENTE_DESC:5, RUTA_DESC:9, VENDEDOR_DESC:15, ARTICULO_DESC:18, MARCA_COD:19, MARCA_DESC:20, CALIBRE_COD:22, CALIBRE_DESC:23, UNIDAD_NEGOCIO_COD:34, PRECIO:37, BONIF:38, PRNETO:39, CANT:40, IMP_FINAL:43 };
+
+function normText(s){
+  return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+}
+function crosswalkKey(marca, pack){ return normText(marca) + '|' + normText(pack); }
+function rawKey(marca, calibre){ return normText(marca) + '|' + normText(calibre); }
+
+const CROSSWALK_BY_MINKEY = new Map();
+const RAW_TO_MINKEY = new Map();
+CROSSWALK.forEach(c => {
+  CROSSWALK_BY_MINKEY.set(crosswalkKey(c.marca, c.pack), c);
+  RAW_TO_MINKEY.set(rawKey(c.marcaRaw, c.calibreRaw), crosswalkKey(c.marca, c.pack));
+});
+
+function fmtMoney(v){
+  if(v === null || v === undefined || isNaN(v)) return '—';
+  return '$' + Math.round(v).toLocaleString('es-AR');
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ============================================================
+   PARSEO DE ARCHIVOS (xlsx/csv) CON SheetJS
+   ============================================================ */
+function readFileAsRows(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
+        resolve(rows);
+      } catch(err){ reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ============================================================
+   PASO 1: TABLA DE PTR MÍNIMO
+   ============================================================ */
+let MIN_TABLE = [];   // [{marca, segmento, pack, uxb, ptrMin}]
+let UNMAPPED_MIN = [];
+
+function parsePasteToRows(text){
+  return text.split('\n').map(l => l.trim()).filter(l => l.length)
+    .map(l => l.split('\t').length > 1 ? l.split('\t') : l.split(/;|,(?=\s*[A-Za-zÁ-ú0-9$])/).map(c=>c.trim()));
+}
+
+function parsePriceCell(raw){
+  if(raw === undefined || raw === null || raw === '') return null;
+  if(typeof raw === 'number') return raw;
+  let s = String(raw).replace(/[^0-9.,]/g, '');
+  if(!s) return null;
+  if(s.includes(',')){
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // sin coma decimal: un punto seguido de 3 dígitos se interpreta como separador de miles
+    s = s.replace(/\.(?=\d{3}(\D|$))/g, '');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function findHeaderAndBuildMinTable(rows){
+  const SCAN_ROWS = Math.min(rows.length, 6);
+  let maxCols = 0;
+  for(let i=0;i<SCAN_ROWS;i++){ if(rows[i]) maxCols = Math.max(maxCols, rows[i].length); }
+
+  // combina el texto de cada columna a lo largo de las primeras filas: esto
+  // resuelve encabezados en 2 filas o celdas combinadas (ej: "Septiembre" en
+  // una fila y "PTR Min" recién en la siguiente, en la misma columna).
+  // Se ignoran filas con un solo valor no vacío (típico de un título general
+  // fusionado en la celda A1, que si no "contamina" la columna 0).
+  const candidateRows = [];
+  for(let i=0;i<SCAN_ROWS;i++){
+    const row = rows[i] || [];
+    const nonEmptyCount = row.filter(v => v!==undefined && v!==null && String(v).trim()!=='').length;
+    if(nonEmptyCount >= 2) candidateRows.push(i);
+  }
+  const combined = [];
+  for(let c=0;c<maxCols;c++){
+    let parts = [];
+    for(const i of candidateRows){
+      const v = rows[i] ? rows[i][c] : '';
+      if(v !== undefined && v !== null && String(v).trim() !== '') parts.push(normText(v));
+    }
+    combined.push(parts.join(' '));
+  }
+
+  const iMarca = combined.findIndex(c => c.includes('MARCA'));
+  const iPack = combined.findIndex(c => c.includes('PACK'));
+  if(iMarca === -1 || iPack === -1) return null;
+  const iSegmento = combined.findIndex(c => c.includes('SEGMENTO'));
+  const iUxb = combined.findIndex(c => c.includes('UXB'));
+  let iPtrMin = combined.findIndex(c => c.includes('PTR') || c.includes('MINIMO') || c.includes('MIN'));
+  if(iPtrMin === -1){
+    // fallback: si ninguna columna dice "PTR"/"Mín" explícitamente, usamos la
+    // columna con texto de encabezado que quedó sin asignar, la más a la derecha.
+    const used = new Set([iMarca,iPack,iSegmento,iUxb].filter(i=>i>=0));
+    for(let c=maxCols-1;c>=0;c--){
+      if(!used.has(c) && combined[c]){ iPtrMin = c; break; }
+    }
+  }
+  if(iPtrMin === -1) return null;
+
+  // la primera fila "real" de datos es la primera que tiene marca no vacía
+  // y un PTR Mínimo que parsea como número — así no confundimos texto legítimo
+  // de datos (ej: "Value" en Segmento) con texto de encabezado.
+  let firstDataRow = -1;
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i];
+    if(!r) continue;
+    const marcaVal = r[iMarca];
+    const ptrVal = parsePriceCell(r[iPtrMin]);
+    if(marcaVal !== undefined && String(marcaVal).trim() !== '' && ptrVal !== null){
+      firstDataRow = i;
+      break;
+    }
+  }
+  if(firstDataRow === -1) return [];
+
+  const out = [];
+  for(let i=firstDataRow;i<rows.length;i++){
+    const r = rows[i];
+    if(!r || r[iMarca]===undefined || String(r[iMarca]).trim()==='') continue;
+    const marca = String(r[iMarca]).trim();
+    const pack = String(r[iPack]).trim();
+    if(!marca || !pack) continue;
+    const segmento = iSegmento>=0 ? String(r[iSegmento]||'').trim() : '';
+    const uxb = iUxb>=0 ? r[iUxb] : '';
+    const ptrMin = parsePriceCell(r[iPtrMin]);
+    out.push({marca, segmento, pack, uxb, ptrMin});
+  }
+  return out;
+}
+
+function processMinTable(){
+  const fileInput = document.getElementById('file-min');
+  const pasteText = document.getElementById('paste-min').value.trim();
+  const statusEl = document.getElementById('status-min');
+
+  const finish = (rows, sourceLabel) => {
+    const parsed = findHeaderAndBuildMinTable(rows);
+    if(!parsed || !parsed.length){
+      statusEl.innerHTML = '<span class="status-warn">No pude reconocer las columnas Marca/Pack/PTR Min. Revisá el formato.</span>';
+      return;
+    }
+    MIN_TABLE = parsed;
+    UNMAPPED_MIN = parsed.filter(r => !CROSSWALK_BY_MINKEY.has(crosswalkKey(r.marca, r.pack)));
+    renderMinPreview(sourceLabel);
+    tryRunCross();
+  };
+
+  if(fileInput.files && fileInput.files[0]){
+    statusEl.innerHTML = 'Leyendo archivo…';
+    readFileAsRows(fileInput.files[0]).then(rows => finish(rows, fileInput.files[0].name))
+      .catch(err => { statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>'; });
+  } else if(pasteText){
+    finish(parsePasteToRows(pasteText), 'texto pegado');
+  } else {
+    statusEl.innerHTML = '<span class="status-warn">Subí un archivo o pegá la tabla primero.</span>';
+  }
+}
+
+function renderMinPreview(sourceLabel){
+  const statusEl = document.getElementById('status-min');
+  const previewEl = document.getElementById('min-preview');
+  statusEl.innerHTML = `<span class="status-ok">✓ ${MIN_TABLE.length} filas leídas de ${escapeHtml(sourceLabel)}</span>`;
+
+  let html = '<div class="scroll-x" style="margin-top:12px;max-height:220px;"><table><thead><tr><th>Marca</th><th>Segmento</th><th>Pack</th><th class="mono">uxb</th><th class="mono">PTR Mín</th><th></th></tr></thead><tbody>';
+  MIN_TABLE.forEach(r => {
+    const mapped = CROSSWALK_BY_MINKEY.has(crosswalkKey(r.marca, r.pack));
+    html += `<tr>
+      <td class="strong">${escapeHtml(r.marca)}</td>
+      <td>${escapeHtml(r.segmento)}</td>
+      <td>${escapeHtml(r.pack)}</td>
+      <td class="mono">${escapeHtml(r.uxb)}</td>
+      <td class="mono">${fmtMoney(r.ptrMin)}</td>
+      <td>${mapped ? '' : '<span class="badge" style="color:var(--red);border-color:var(--red);">sin cruce</span>'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  if(UNMAPPED_MIN.length){
+    html += `<div class="warn-box">⚠ ${UNMAPPED_MIN.length} combinación(es) de Marca+Pack no tienen un cruce conocido contra la base de ventas: ${UNMAPPED_MIN.map(r=>escapeHtml(r.marca+' / '+r.pack)).join(', ')}. Esas filas no se van a poder chequear — decime cuál es el Calibre real que corresponde y lo agrego al cruce.</div>`;
+  }
+  previewEl.innerHTML = html;
+}
+
+/* ============================================================
+   PASO 2: BASE DE VENTAS
+   ============================================================ */
+let SALES_ROWS = []; // filas crudas cruzadas: {vendedor, cliente, ruta, marca, calibre, articulo, fecha, precio, bonif, prNeto, cant, minRow}
+let UNMAPPED_SALES_SAMPLES = new Map(); // marca|calibre no reconocidos -> count (informativo, no bloqueante)
+
+function processSalesFile(file){
+  const statusEl = document.getElementById('status-sales');
+  statusEl.innerHTML = 'Leyendo y cruzando…';
+  readFileAsRows(file).then(rows => {
+    let headerRowIdx = 0;
+    // saltea la fila de headers si la primera celda no es numérica de fecha
+    const dataRows = rows.slice(1);
+    const out = [];
+    const outAll = [];
+    let matched = 0, totalConsidered = 0;
+    UNMAPPED_SALES_SAMPLES = new Map();
+
+    dataRows.forEach(r => {
+      if(!r || r.length < COL.IMP_FINAL+1) return;
+      const marcaRaw = r[COL.MARCA_DESC];
+      const calibreRaw = r[COL.CALIBRE_DESC];
+      if(!marcaRaw || !calibreRaw) return;
+      const cant = parseFloat(r[COL.CANT]) || 0;
+      const impFinal = parseFloat(r[COL.IMP_FINAL]);
+      const prNeto = parseFloat(r[COL.PRNETO]);
+      if(cant <= 0 || !isFinite(impFinal) || impFinal <= 0) return;
+      const precioFinal = impFinal / cant; // precio por bulto YA con impuestos (IVA + Internos), que es contra lo que se compara el PTR Mínimo
+
+      const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
+      const canal = CLIENTS_CANAL_MAP.get(codCliente) || 'SIN CLASIF';
+      const vendedor = String(r[COL.VENDEDOR_DESC]||'').trim();
+      const clienteNombre = String(r[COL.CLIENTE_DESC]||'').trim();
+      const fecha = r[COL.FECHA];
+
+      // guarda TODAS las filas válidas (más allá de si cruzan o no contra el PTR),
+      // para usar en Ventas Extraordinarias, Fuera de Ruta y Compradores del Mes
+      const marcaCod = parseInt(r[COL.MARCA_COD], 10);
+      const calibreCod = parseInt(r[COL.CALIBRE_COD], 10);
+      const unCod = parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10);
+      outAll.push({
+        vendedor, cliente: clienteNombre, codCliente, canal,
+        marca: normText(marcaRaw), calibre: normText(calibreRaw),
+        marcaCod, calibreCod, unCod,
+        articulo: String(r[COL.ARTICULO_DESC]||'').trim(),
+        fecha, cant, impFinal
+      });
+
+      const key = rawKey(marcaRaw, calibreRaw);
+      const minKey = RAW_TO_MINKEY.get(key);
+      if(!minKey){
+        UNMAPPED_SALES_SAMPLES.set(normText(marcaRaw)+' / '+normText(calibreRaw), (UNMAPPED_SALES_SAMPLES.get(normText(marcaRaw)+' / '+normText(calibreRaw))||0)+1);
+        return;
+      }
+      const minRow = MIN_TABLE.find(m => crosswalkKey(m.marca, m.pack) === minKey);
+      if(!minRow || minRow.ptrMin === null) return;
+
+      totalConsidered++;
+      matched++;
+      out.push({
+        vendedor,
+        cliente: clienteNombre,
+        codCliente: codCliente,
+        canal: canal,
+        ruta: String(r[COL.RUTA_DESC]||'').trim(),
+        articulo: String(r[COL.ARTICULO_DESC]||'').trim(),
+        marca: minRow.marca,
+        pack: minRow.pack,
+        fecha: fecha,
+        prNeto: isFinite(prNeto) ? prNeto : null,
+        precioFinal: precioFinal,
+        cant: cant,
+        ptrMin: minRow.ptrMin,
+        diff: precioFinal - minRow.ptrMin
+      });
+    });
+
+    SALES_ROWS = out;
+    ALL_SALES_RAW = outAll;
+    let msg = `<span class="status-ok">✓ ${dataRows.length.toLocaleString('es-AR')} filas leídas, ${matched.toLocaleString('es-AR')} cruzadas contra la tabla de PTR</span>`;
+    if(UNMAPPED_SALES_SAMPLES.size){
+      const top = Array.from(UNMAPPED_SALES_SAMPLES.entries()).sort((a,b)=>b[1]-a[1]).slice(0,6);
+      msg += `<div class="hint">Hubo combinaciones Marca/Calibre en la base de ventas que no están en tu tabla de PTR Mínimo (se ignoraron para Perforaciones, pero SÍ se usan en Ventas Extraordinarias y Fuera de Ruta): ${top.map(([k,v])=>escapeHtml(k)+' ('+v+')').join(' · ')}${UNMAPPED_SALES_SAMPLES.size>6?'…':''}</div>`;
+    }
+    statusEl.innerHTML = msg;
+    tryRunCross();
+    renderExtraordinarias();
+    populateFueraRutaVendedorFilter();
+    populateFueraRutaFechaFilter();
+    renderFueraDeRuta();
+    renderCompradoresMes();
+  }).catch(err => {
+    statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
+  });
+}
+
+/* ============================================================
+   CRUCE + RESULTADOS (Perforaciones)
+   ============================================================ */
+let excludedVendors = new Set();
+let sortState = {col:'diff', dir:1};
+let ALL_SALES_RAW = []; // TODAS las filas válidas de la base de ventas (para Extraordinarias y Fuera de Ruta)
+
+function tryRunCross(){
+  const empty = document.getElementById('perforaciones-empty');
+  const wrap = document.getElementById('results-wrap');
+  if(!MIN_TABLE.length || !SALES_ROWS.length){
+    empty.style.display = '';
+    wrap.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display = '';
+  buildVendorExcludeList();
+  populateMarcaFilter();
+  renderAll();
+}
+
+function buildVendorExcludeList(){
+  const box = document.getElementById('vendor-exclude-box');
+  const vendors = Array.from(new Set(SALES_ROWS.map(r => r.vendedor))).filter(Boolean).sort((a,b)=>a.localeCompare(b,'es'));
+  const lettersOnly = (s) => normText(s).replace(/[^A-Z]/g, '');
+  const defaultLetters = DEFAULT_EXCLUDED_VENDORS.map(lettersOnly);
+  if(excludedVendors.size === 0){
+    vendors.forEach(v => {
+      const nv = lettersOnly(v);
+      if(defaultLetters.some(ex => nv.includes(ex))) excludedVendors.add(v);
+    });
+  }
+  box.innerHTML = vendors.map(v => `
+    <label class="vendor-item">
+      <input type="checkbox" data-vendor="${escapeHtml(v)}" ${excludedVendors.has(v) ? 'checked' : ''}>
+      ${escapeHtml(v)}
+    </label>
+  `).join('');
+  box.querySelectorAll('input[data-vendor]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if(cb.checked) excludedVendors.add(cb.dataset.vendor);
+      else excludedVendors.delete(cb.dataset.vendor);
+      renderAll();
+    });
+  });
+}
+
+function populateMarcaFilter(){
+  const sel = document.getElementById('filter-marca');
+  const marcas = Array.from(new Set(SALES_ROWS.map(r => r.marca))).sort((a,b)=>a.localeCompare(b,'es'));
+  sel.innerHTML = '<option value="">Todas</option>' + marcas.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+
+  const packSel = document.getElementById('filter-pack');
+  const packs = Array.from(new Set(SALES_ROWS.map(r => r.pack))).sort((a,b)=>a.localeCompare(b,'es'));
+  packSel.innerHTML = '<option value="">Todos</option>' + packs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+
+  const canalSel = document.getElementById('filter-canal');
+  const canalesPresentes = new Set(SALES_ROWS.map(r => r.canal));
+  canalSel.innerHTML = '<option value="">Todos</option>' + CANAL_ORDER.filter(c => canalesPresentes.has(c)).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(CANAL_LABELS[c]||c)}</option>`).join('');
+}
+
+let activeVendorFilter = '';
+
+function getFilteredRows(){
+  const marca = document.getElementById('filter-marca').value;
+  const pack = document.getElementById('filter-pack').value;
+  const canal = document.getElementById('filter-canal').value;
+  const clienteQ = document.getElementById('filter-cliente').value.trim().toLowerCase();
+  const estado = document.getElementById('filter-estado').value;
+  return SALES_ROWS.filter(r => {
+    if(excludedVendors.has(r.vendedor)) return false;
+    if(activeVendorFilter && r.vendedor !== activeVendorFilter) return false;
+    if(marca && r.marca !== marca) return false;
+    if(pack && r.pack !== pack) return false;
+    if(canal && r.canal !== canal) return false;
+    if(clienteQ && !r.cliente.toLowerCase().includes(clienteQ)) return false;
+    if(estado === 'perfora' && !(r.diff < 0)) return false;
+    if(estado === 'ok' && !(r.diff >= 0)) return false;
+    return true;
+  });
+}
+
+function renderAll(){
+  const rows = getFilteredRows();
+  renderKpis(rows);
+  renderByVendorTable();
+  renderDetailTable(rows);
+}
+
+function renderKpis(rows){
+  const perfora = rows.filter(r => r.diff < 0);
+  const impacto = perfora.reduce((sum, r) => sum + (-r.diff) * r.cant, 0);
+  document.getElementById('kpi-total').textContent = rows.length.toLocaleString('es-AR');
+  document.getElementById('kpi-perfora').textContent = perfora.length.toLocaleString('es-AR');
+  document.getElementById('kpi-impacto').textContent = fmtMoney(impacto);
+  document.getElementById('kpi-vendedores').textContent = new Set(perfora.map(r=>r.vendedor)).size;
+}
+
+function renderByVendorTable(){
+  const el = document.getElementById('table-by-vendor');
+  // usa todos los filtros salvo el de vendedor activo, para no vaciar la tabla al hacer click
+  const marca = document.getElementById('filter-marca').value;
+  const pack = document.getElementById('filter-pack').value;
+  const canal = document.getElementById('filter-canal').value;
+  const clienteQ = document.getElementById('filter-cliente').value.trim().toLowerCase();
+  const base = SALES_ROWS.filter(r => {
+    if(excludedVendors.has(r.vendedor)) return false;
+    if(marca && r.marca !== marca) return false;
+    if(pack && r.pack !== pack) return false;
+    if(canal && r.canal !== canal) return false;
+    if(clienteQ && !r.cliente.toLowerCase().includes(clienteQ)) return false;
+    return true;
+  });
+  const byVendor = new Map();
+  base.forEach(r => {
+    if(!byVendor.has(r.vendedor)) byVendor.set(r.vendedor, {vendedor:r.vendedor, total:0, perfora:0, impacto:0, clientes:new Set()});
+    const v = byVendor.get(r.vendedor);
+    v.total++;
+    if(r.diff < 0){ v.perfora++; v.impacto += (-r.diff)*r.cant; v.clientes.add(r.cliente); }
+  });
+  const list = Array.from(byVendor.values()).filter(v => v.perfora > 0).sort((a,b)=>b.impacto-a.impacto);
+
+  if(!list.length){ el.innerHTML = '<div class="empty-state">Sin perforaciones para este filtro. 🎉</div>'; return; }
+
+  let html = '<table><thead><tr><th>Vendedor</th><th class="mono">Renglones</th><th class="mono">Perforaciones</th><th class="mono">Clientes</th><th class="mono">Impacto</th></tr></thead><tbody>';
+  list.forEach(v => {
+    html += `<tr class="clickable-row" data-vendor="${escapeHtml(v.vendedor)}">
+      <td class="strong">${escapeHtml(v.vendedor)} ${activeVendorFilter===v.vendedor ? '<span class="badge" style="color:var(--copper);border-color:var(--copper);">filtrando</span>':''}</td>
+      <td class="mono">${v.total}</td>
+      <td class="mono diff-neg">${v.perfora}</td>
+      <td class="mono">${v.clientes.size}</td>
+      <td class="mono diff-neg">${fmtMoney(v.impacto)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  el.querySelectorAll('tr[data-vendor]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const v = tr.dataset.vendor;
+      activeVendorFilter = (activeVendorFilter === v) ? '' : v;
+      renderAll();
+    });
+  });
+}
+
+function renderDetailTable(rows){
+  const el = document.getElementById('table-detail');
+  if(!rows.length){ el.innerHTML = '<div class="empty-state">Sin renglones para este filtro.</div>'; return; }
+
+  const sorted = rows.slice().sort((a,b) => {
+    let av, bv;
+    if(sortState.col === 'impacto'){ av = a.diff*a.cant; bv = b.diff*b.cant; }
+    else { av = a[sortState.col]; bv = b[sortState.col]; }
+    if(sortState.col === 'fecha'){ av = new Date(av).getTime()||0; bv = new Date(bv).getTime()||0; }
+    if(typeof av === 'string') return av.localeCompare(bv,'es') * sortState.dir;
+    return ((av||0) - (bv||0)) * sortState.dir;
+  });
+
+  const cols = [
+    {key:'vendedor', label:'Vendedor'},
+    {key:'cliente', label:'Cliente'},
+    {key:'canal', label:'Canal'},
+    {key:'marca', label:'Marca'},
+    {key:'pack', label:'Pack'},
+    {key:'fecha', label:'Fecha'},
+    {key:'ptrMin', label:'PTR Mín', mono:true},
+    {key:'precioFinal', label:'Precio Final/bulto', mono:true},
+    {key:'prNeto', label:'Precio Neto (ref.)', mono:true},
+    {key:'cant', label:'Bultos', mono:true},
+    {key:'diff', label:'Diferencia/bulto', mono:true},
+    {key:'impacto', label:'Impacto $', mono:true},
+  ];
+
+  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c.mono?'mono':''}" data-sort="${c.key}">${c.label}<span class="arrow">${sortState.col===c.key ? (sortState.dir>0?'▲':'▼') : ''}</span></th>`).join('') + '<th>Estado</th></tr></thead><tbody>';
+
+  const top = sorted.slice(0, 400);
+  top.forEach(r => {
+    const fecha = r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : String(r.fecha||'');
+    const diffCls = r.diff < 0 ? 'diff-neg' : 'diff-pos';
+    const impacto = r.diff * r.cant;
+    html += `<tr class="${r.diff<0?'perfora':''}">
+      <td>${escapeHtml(r.vendedor)}</td>
+      <td class="strong">${escapeHtml(r.cliente)}</td>
+      <td><span class="badge">${escapeHtml(CANAL_LABELS[r.canal]||r.canal)}</span></td>
+      <td>${escapeHtml(r.marca)}</td>
+      <td>${escapeHtml(r.pack)}</td>
+      <td class="mono">${fecha}</td>
+      <td class="mono">${fmtMoney(r.ptrMin)}</td>
+      <td class="mono strong">${fmtMoney(r.precioFinal)}</td>
+      <td class="mono" style="color:var(--text-faint);">${fmtMoney(r.prNeto)}</td>
+      <td class="mono">${r.cant.toLocaleString('es-AR', {maximumFractionDigits:2})}</td>
+      <td class="mono ${diffCls}">${r.diff>=0?'+':''}${fmtMoney(r.diff)}</td>
+      <td class="mono ${diffCls}">${impacto>=0?'+':''}${fmtMoney(impacto)}</td>
+      <td>${r.diff<0 ? '<span class="tag-perfora">PERFORA</span>' : '<span class="tag-ok">OK</span>'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  if(sorted.length > 400) html += `<div class="hint">Mostrando 400 de ${sorted.length.toLocaleString('es-AR')} renglones (los más relevantes según el orden elegido).</div>`;
+  el.innerHTML = html;
+
+  el.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if(sortState.col === col) sortState.dir *= -1;
+      else { sortState.col = col; sortState.dir = 1; }
+      renderDetailTable(getFilteredRows());
+    });
+  });
+}
+
+/* ============================================================
+   EXPORTAR A EXCEL (helper genérico)
+   ============================================================ */
+function exportToExcel(filename, sheetName, aoa){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+function todayStamp(){ return new Date().toISOString().slice(0,10); }
+
+function exportPerforacionesExcel(){
+  const rows = getFilteredRows().slice().sort((a,b) => {
+    let av, bv;
+    if(sortState.col === 'impacto'){ av = a.diff*a.cant; bv = b.diff*b.cant; }
+    else { av = a[sortState.col]; bv = b[sortState.col]; }
+    if(sortState.col === 'fecha'){ av = new Date(av).getTime()||0; bv = new Date(bv).getTime()||0; }
+    if(typeof av === 'string') return av.localeCompare(bv,'es') * sortState.dir;
+    return ((av||0) - (bv||0)) * sortState.dir;
+  });
+  const header = ['Vendedor','Cód. Cliente','Cliente','Canal','Marca','Pack','Fecha','PTR Mínimo','Precio Final/bulto','Precio Neto (ref.)','Bultos','Diferencia/bulto','Impacto $','Estado'];
+  const aoa = [header, ...rows.map(r => [
+    r.vendedor, r.codCliente, r.cliente, CANAL_LABELS[r.canal]||r.canal, r.marca, r.pack,
+    r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : r.fecha,
+    r.ptrMin, r.precioFinal, r.prNeto, r.cant, r.diff, r.diff*r.cant, r.diff<0?'PERFORA':'OK'
+  ])];
+  exportToExcel(`perforaciones_${todayStamp()}.xlsx`, 'Perforaciones', aoa);
+}
+document.getElementById('btn-export-perforaciones').addEventListener('click', exportPerforacionesExcel);
+
+/* ============================================================
+   TAB: PEDIDOS DUPLICADOS
+   ============================================================ */
+let PEDIDOS_ROWS = [];
+
+function parseClienteCombinado(raw){
+  const s = String(raw||'').trim();
+  const m = s.match(/^(\d+)\s*-\s*(.*)$/);
+  if(m) return { code: parseInt(m[1],10), name: m[2].trim() };
+  return { code: null, name: s };
+}
+
+function processPedidosFile(file){
+  const statusEl = document.getElementById('status-pedidos');
+  statusEl.innerHTML = 'Leyendo…';
+  readFileAsRows(file).then(rows => {
+    if(!rows.length){ statusEl.innerHTML = '<span class="status-warn">Archivo vacío.</span>'; return; }
+    const header = rows[0].map(c => normText(c));
+    const iCliente = header.findIndex(c => c === 'CLIENTE');
+    const iPedido = header.findIndex(c => c === 'PEDIDO');
+    const iFecha = header.findIndex(c => c === 'FECHA');
+    const iTipo = header.findIndex(c => c === 'TIPO');
+    const iVendedor = header.findIndex(c => c === 'VENDEDOR');
+    const iBultos = header.findIndex(c => c === 'BULTOS');
+    const iSubFinal = header.findIndex(c => c.includes('SUB') && c.includes('FINAL'));
+    const iEstado = header.findIndex(c => c === 'ESTADO');
+
+    if(iCliente === -1 || iPedido === -1 || iBultos === -1 || iSubFinal === -1){
+      statusEl.innerHTML = '<span class="status-warn">No reconocí las columnas Cliente/Pedido/Bultos/Sub.Final en este archivo.</span>';
+      return;
+    }
+
+    const out = [];
+    for(let i=1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r || !r[iCliente]) continue;
+      const { code: clienteCode, name: clienteNombre } = parseClienteCombinado(r[iCliente]);
+      const fechaRaw = iFecha>=0 ? r[iFecha] : null;
+      const fecha = fechaRaw instanceof Date ? fechaRaw : (fechaRaw ? new Date(fechaRaw) : null);
+      out.push({
+        pedido: iPedido>=0 ? r[iPedido] : '',
+        clienteCode, clienteNombre,
+        fecha,
+        tipo: iTipo>=0 ? String(r[iTipo]||'').trim() : '',
+        vendedor: iVendedor>=0 ? parseClienteCombinado(r[iVendedor]).name || String(r[iVendedor]||'').trim() : '',
+        bultos: parseFloat(r[iBultos]) || 0,
+        subfinal: parseFloat(r[iSubFinal]) || 0,
+        estado: iEstado>=0 ? String(r[iEstado]||'').trim() : ''
+      });
+    }
+    PEDIDOS_ROWS = out;
+    statusEl.innerHTML = `<span class="status-ok">✓ ${out.length.toLocaleString('es-AR')} pedidos leídos</span>`;
+    renderDuplicados();
+    renderExtraordinarias();
+    populateCompradoresFiltros();
+    renderCompradoresMes();
+  }).catch(err => {
+    statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
+  });
+}
+
+function closeEnoughPct(a, b, pct){
+  if(a === 0 && b === 0) return true;
+  const base = Math.max(Math.abs(a), Math.abs(b), 1);
+  return Math.abs(a-b) / base * 100 <= pct;
+}
+
+function findDuplicatePairs(dayWindow, tolerancePct){
+  const byClient = new Map();
+  PEDIDOS_ROWS.filter(p => p.tipo === 'FACTURA' && p.clienteCode !== null && p.fecha).forEach(p => {
+    if(!byClient.has(p.clienteCode)) byClient.set(p.clienteCode, []);
+    byClient.get(p.clienteCode).push(p);
+  });
+  const pairs = [];
+  byClient.forEach(orders => {
+    orders.sort((a,b) => a.fecha - b.fecha);
+    for(let i=0;i<orders.length;i++){
+      for(let j=i+1;j<orders.length;j++){
+        const diffDays = Math.round(Math.abs(orders[j].fecha - orders[i].fecha) / 86400000);
+        if(diffDays > dayWindow) break; // ordenado por fecha, no hay más candidatos para i
+        const bultosOk = closeEnoughPct(orders[i].bultos, orders[j].bultos, tolerancePct);
+        const subfinalOk = closeEnoughPct(orders[i].subfinal, orders[j].subfinal, tolerancePct);
+        if(bultosOk && subfinalOk){
+          pairs.push({ a: orders[i], b: orders[j], diffDays });
+        }
+      }
+    }
+  });
+  pairs.sort((x,y) => y.a.subfinal + y.b.subfinal - (x.a.subfinal + x.b.subfinal));
+  return pairs;
+}
+
+function renderDuplicados(){
+  const el = document.getElementById('table-duplicados');
+  if(!PEDIDOS_ROWS.length){ el.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; return; }
+  const dayWindow = parseInt(document.getElementById('dup-dias').value, 10) || 0;
+  const tolerancePct = parseFloat(document.getElementById('dup-tolerancia').value) || 0;
+  const pairs = findDuplicatePairs(dayWindow, tolerancePct);
+
+  if(!pairs.length){ el.innerHTML = `<div class="empty-state">No encontré pedidos que parezcan duplicados con esta ventana (${dayWindow} día/s) y tolerancia (${tolerancePct}%).</div>`; return; }
+
+  let html = `<div class="hint" style="margin-bottom:12px;">${pairs.length} par(es) de pedidos posiblemente duplicados.</div>`;
+  pairs.forEach(p => {
+    const fmtFecha = (d) => d instanceof Date ? d.toLocaleDateString('es-AR') : '—';
+    html += `<div class="dup-pair">
+      <div class="dup-head">${escapeHtml(p.a.clienteNombre)} <span class="badge">${p.diffDays===0?'mismo día':p.diffDays+' día(s) de diferencia'}</span></div>
+      <div class="dup-side"><b>Pedido ${escapeHtml(String(p.a.pedido))}</b><br>${fmtFecha(p.a.fecha)} · ${escapeHtml(p.a.vendedor)}<br>Bultos: ${p.a.bultos.toLocaleString('es-AR',{maximumFractionDigits:2})} · Sub.Final: ${fmtMoney(p.a.subfinal)}</div>
+      <div class="dup-side"><b>Pedido ${escapeHtml(String(p.b.pedido))}</b><br>${fmtFecha(p.b.fecha)} · ${escapeHtml(p.b.vendedor)}<br>Bultos: ${p.b.bultos.toLocaleString('es-AR',{maximumFractionDigits:2})} · Sub.Final: ${fmtMoney(p.b.subfinal)}</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function exportDuplicadosExcel(){
+  const dayWindow = parseInt(document.getElementById('dup-dias').value, 10) || 0;
+  const tolerancePct = parseFloat(document.getElementById('dup-tolerancia').value) || 0;
+  const pairs = findDuplicatePairs(dayWindow, tolerancePct);
+  const header = ['Cliente','Pedido A','Fecha A','Vendedor A','Bultos A','Sub.Final A','Pedido B','Fecha B','Vendedor B','Bultos B','Sub.Final B','Días entre pedidos'];
+  const aoa = [header, ...pairs.map(p => [
+    p.a.clienteNombre,
+    p.a.pedido, p.a.fecha instanceof Date ? p.a.fecha.toLocaleDateString('es-AR') : '', p.a.vendedor, p.a.bultos, p.a.subfinal,
+    p.b.pedido, p.b.fecha instanceof Date ? p.b.fecha.toLocaleDateString('es-AR') : '', p.b.vendedor, p.b.bultos, p.b.subfinal,
+    p.diffDays
+  ])];
+  exportToExcel(`pedidos_duplicados_${todayStamp()}.xlsx`, 'Duplicados', aoa);
+}
+
+/* ============================================================
+   TAB: VENTAS EXTRAORDINARIAS
+   ============================================================ */
+function countPedidosPorClienteFecha(){
+  // cuenta pedidos DISTINTOS (por número de Pedido) de la Base de Pedidos (Paso 3),
+  // agrupados por cliente + fecha — esto es lo que realmente significa "cantidad de pedidos"
+  const map = new Map(); // 'YYYY-MM-DD|codCliente' -> Set de números de pedido
+  PEDIDOS_ROWS.forEach(p => {
+    if(p.clienteCode === null || !p.fecha) return;
+    const key = dateKeyOf(p.fecha) + '|' + p.clienteCode;
+    if(!map.has(key)) map.set(key, new Set());
+    map.get(key).add(p.pedido);
+  });
+  const counts = new Map();
+  map.forEach((set, key) => counts.set(key, set.size));
+  return counts;
+}
+
+function groupExtraordinarias(){
+  const byGroup = new Map(); // 'YYYY-MM-DD|codCliente' -> {fecha, codCliente, cliente, vendedores:Set, bultos, importe}
+  ALL_SALES_RAW.forEach(r => {
+    const d = r.fecha instanceof Date ? r.fecha : (r.fecha ? new Date(r.fecha) : null);
+    const fechaKey = d ? d.toISOString().slice(0,10) : 'sin fecha';
+    const key = fechaKey + '|' + r.codCliente;
+    if(!byGroup.has(key)) byGroup.set(key, { fecha: d, codCliente: r.codCliente, cliente: r.cliente, vendedores: new Set(), bultos: 0, importe: 0 });
+    const g = byGroup.get(key);
+    g.vendedores.add(r.vendedor);
+    g.bultos += r.cant;
+    g.importe += r.impFinal;
+  });
+  const pedidosCount = countPedidosPorClienteFecha();
+  const result = Array.from(byGroup.entries()).map(([key, g]) => ({
+    ...g,
+    cantPedidos: PEDIDOS_ROWS.length ? (pedidosCount.get(key) ?? 0) : null
+  }));
+  return result.sort((a,b) => b.importe - a.importe);
+}
+
+function renderExtraordinarias(){
+  const el = document.getElementById('table-extraordinarias');
+  if(!ALL_SALES_RAW.length){ el.innerHTML = '<div class="empty-state">Subí la base de ventas (Paso 2).</div>'; return; }
+  const topN = parseInt(document.getElementById('extra-topn').value, 10) || 30;
+  const sorted = groupExtraordinarias().slice(0, topN);
+
+  let html = '<table><thead><tr><th>#</th><th>Fecha de pedido</th><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th><th class="mono">Cant. Pedidos</th><th class="mono">Bultos totales</th><th class="mono">Importe Total</th></tr></thead><tbody>';
+  sorted.forEach((r, i) => {
+    const fecha = r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : 'Sin fecha';
+    html += `<tr>
+      <td class="mono">${i+1}</td>
+      <td class="mono">${fecha}</td>
+      <td class="mono">${r.codCliente||''}</td>
+      <td class="strong">${escapeHtml(r.cliente)}</td>
+      <td>${escapeHtml(Array.from(r.vendedores).join(', '))}</td>
+      <td class="mono">${r.cantPedidos === null ? '—' : r.cantPedidos}</td>
+      <td class="mono">${r.bultos.toLocaleString('es-AR',{maximumFractionDigits:2})}</td>
+      <td class="mono strong">${fmtMoney(r.importe)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  if(!PEDIDOS_ROWS.length) html += '<div class="hint">"Cant. Pedidos" necesita la Base de Pedidos (Paso 3) — subila para ver el número real.</div>';
+  el.innerHTML = html;
+}
+
+function exportExtraordinariasExcel(){
+  const topN = parseInt(document.getElementById('extra-topn').value, 10) || 30;
+  const sorted = groupExtraordinarias().slice(0, topN);
+  const header = ['#','Fecha de pedido','Cód. Cliente','Razón Social','Vendedor','Cant. Pedidos','Bultos totales','Importe Total'];
+  const aoa = [header, ...sorted.map((r,i) => [
+    i+1, r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : 'Sin fecha',
+    r.codCliente, r.cliente, Array.from(r.vendedores).join(', '), r.cantPedidos === null ? '' : r.cantPedidos, r.bultos, r.importe
+  ])];
+  exportToExcel(`ventas_extraordinarias_${todayStamp()}.xlsx`, 'Extraordinarias', aoa);
+}
+
+/* ============================================================
+   TAB: FUERA DE RUTA
+   ============================================================ */
+let VISITA_MAP = new Map(); // codigo cliente -> {razonSocial, ruta, entrega:{LU..DO: bool}}
+const DIAS_DEF = [['LU','LUN'],['MA','MAR'],['MI','MIE'],['JU','JUE'],['VI','VIE'],['SA','SAB'],['DO','DOM']];
+const DIA_LABEL = {LU:'Lunes',MA:'Martes',MI:'Miércoles',JU:'Jueves',VI:'Viernes',SA:'Sábado',DO:'Domingo'};
+
+function processVisitaFile(file){
+  const statusEl = document.getElementById('status-visita');
+  statusEl.innerHTML = 'Leyendo…';
+  readFileAsRows(file).then(rows => {
+    if(!rows.length){ statusEl.innerHTML = '<span class="status-warn">Archivo vacío.</span>'; return; }
+    const header = rows[0].map(c => normText(c));
+
+    // Formato BEES ONE: columna Vendor_Account_ID = "47311200" + código de cliente,
+    // y columnas de día en inglés (Mon..Sun) con valor "FREE" = hay entrega ese día.
+    const iVendorId = header.findIndex(c => c === 'VENDOR_ACCOUNT_ID');
+    if(iVendorId >= 0){
+      const dayMap = [['LU','MON'],['MA','TUE'],['MI','WED'],['JU','THU'],['VI','FRI'],['SA','SAT'],['DO','SUN']];
+      const entCols = {};
+      dayMap.forEach(([key, code]) => { entCols[key] = header.findIndex(c => c === code); });
+
+      VISITA_MAP = new Map();
+      let sinPrefijo = 0;
+      for(let i=1;i<rows.length;i++){
+        const r = rows[i];
+        if(!r) continue;
+        let idStr = String(r[iVendorId] || '').trim();
+        if(!idStr) continue;
+        if(idStr.startsWith('47311200')){
+          idStr = idStr.slice(8);
+        } else {
+          sinPrefijo++;
+        }
+        const code = parseInt(idStr, 10);
+        if(!code) continue;
+        const entrega = {};
+        dayMap.forEach(([key]) => {
+          const c = entCols[key];
+          entrega[key] = c>=0 ? (normText(r[c]).trim() === 'FREE') : false;
+        });
+        if(VISITA_MAP.has(code)){
+          const prev = VISITA_MAP.get(code).entrega;
+          dayMap.forEach(([key]) => { prev[key] = prev[key] || entrega[key]; });
+        } else {
+          VISITA_MAP.set(code, { razonSocial: '', ruta: '', entrega });
+        }
+      }
+      let msg = `<span class="status-ok">✓ ${VISITA_MAP.size.toLocaleString('es-AR')} clientes leídos (BEES ONE)</span>`;
+      if(sinPrefijo) msg += `<div class="hint">${sinPrefijo} fila(s) tenían un Vendor_Account_ID sin el prefijo 47311200 — se usaron tal cual.</div>`;
+      statusEl.innerHTML = msg;
+      renderFueraDeRuta();
+      renderCompradoresMes();
+      return;
+    }
+
+    // Formato anterior (Excel con columna "Cliente" y LUN ENT..DOM ENT)
+    const iCliente = header.findIndex(c => c === 'CLIENTE');
+    const iRazon = header.findIndex(c => c.includes('RAZON SOCIAL'));
+    const iRuta = header.findIndex(c => c === 'RUTA');
+    if(iCliente === -1){
+      statusEl.innerHTML = '<span class="status-warn">No reconocí las columnas de este archivo (ni "Vendor_Account_ID" de BEES ONE, ni "Cliente" del formato anterior).</span>';
+      return;
+    }
+    const entCols = {};
+    DIAS_DEF.forEach(([key, prefix]) => {
+      entCols[key] = header.findIndex(c => c.includes(prefix) && c.includes('ENT'));
+    });
+
+    VISITA_MAP = new Map();
+    for(let i=1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r) continue;
+      const code = parseInt(r[iCliente], 10);
+      if(!code) continue;
+      const entrega = {};
+      DIAS_DEF.forEach(([key]) => {
+        const c = entCols[key];
+        entrega[key] = c>=0 ? (String(r[c]||'').trim().toUpperCase() === 'X') : false;
+      });
+      VISITA_MAP.set(code, {
+        razonSocial: iRazon>=0 ? String(r[iRazon]||'').trim() : '',
+        ruta: iRuta>=0 ? String(r[iRuta]||'').trim() : '',
+        entrega
+      });
+    }
+    statusEl.innerHTML = `<span class="status-ok">✓ ${VISITA_MAP.size.toLocaleString('es-AR')} clientes leídos</span>`;
+    renderFueraDeRuta();
+    renderCompradoresMes();
+  }).catch(err => {
+    statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
+  });
+}
+
+function dateKeyOf(fecha){
+  const d = fecha instanceof Date ? fecha : (fecha ? new Date(fecha) : null);
+  return d && !isNaN(d) ? d.toISOString().slice(0,10) : null;
+}
+
+function computeFueraDeRuta(dia, vendedorFiltro, fechaFiltro){
+  const clientesVendidos = new Map();
+  ALL_SALES_RAW.forEach(r => {
+    if(!r.codCliente) return;
+    if(vendedorFiltro && r.vendedor !== vendedorFiltro) return;
+    if(fechaFiltro && dateKeyOf(r.fecha) !== fechaFiltro) return;
+    if(!clientesVendidos.has(r.codCliente)) clientesVendidos.set(r.codCliente, { nombre: r.cliente, vendedores: new Set(), importe: 0 });
+    const c = clientesVendidos.get(r.codCliente);
+    c.vendedores.add(r.vendedor);
+    c.importe += r.impFinal;
+  });
+  const fuera = [];
+  clientesVendidos.forEach((info, code) => {
+    const visita = VISITA_MAP.get(code);
+    const tieneEntrega = !!(visita && visita.entrega[dia]);
+    if(!tieneEntrega){
+      fuera.push({ codCliente: code, cliente: info.nombre, vendedores: Array.from(info.vendedores).join(', '), importe: info.importe, enBase: !!visita, ruta: ((CLIENTES_ACTIVOS.get(code) || {}).ruta) || (visita ? visita.ruta : '') });
+    }
+  });
+  fuera.sort((a,b) => b.importe - a.importe);
+  return fuera;
+}
+
+function populateFueraRutaVendedorFilter(){
+  const sel = document.getElementById('fuera-ruta-vendedor');
+  const actual = sel.value;
+  const vendedores = Array.from(new Set(ALL_SALES_RAW.map(r => r.vendedor))).filter(Boolean).sort((a,b) => a.localeCompare(b,'es'));
+  sel.innerHTML = '<option value="">Todos</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(vendedores.includes(actual)) sel.value = actual;
+}
+
+function populateFueraRutaFechaFilter(){
+  const sel = document.getElementById('fuera-ruta-fecha');
+  const fechas = Array.from(new Set(ALL_SALES_RAW.map(r => dateKeyOf(r.fecha)).filter(Boolean))).sort().reverse();
+  sel.innerHTML = '<option value="">Todas las fechas</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')}</option>`).join('');
+  // por defecto, la fecha más reciente de la base — así no se mezclan pedidos de días distintos en un mismo chequeo
+  if(fechas.length) sel.value = fechas[0];
+}
+
+function renderFueraDeRuta(){
+  const el = document.getElementById('table-fuera-ruta');
+  const dia = document.getElementById('fuera-ruta-dia').value;
+  const vendedorFiltro = document.getElementById('fuera-ruta-vendedor').value;
+  const fechaFiltro = document.getElementById('fuera-ruta-fecha').value;
+  if(!dia){ el.innerHTML = '<div class="empty-state">Elegí qué día es "mañana" arriba.</div>'; return; }
+  if(!ALL_SALES_RAW.length){ el.innerHTML = '<div class="empty-state">Subí primero la base de ventas (Paso 2).</div>'; return; }
+  if(!VISITA_MAP.size){ el.innerHTML = '<div class="empty-state">Subí la base de días de visita (Paso 4).</div>'; return; }
+
+  const fuera = computeFueraDeRuta(dia, vendedorFiltro, fechaFiltro);
+  const fechaLabel = fechaFiltro ? new Date(fechaFiltro+'T00:00:00').toLocaleDateString('es-AR') : 'todas las fechas de la base';
+  if(!fuera.length){ el.innerHTML = `<div class="empty-state">Todos los clientes con ventas (${fechaLabel}) tienen entrega marcada para ${DIA_LABEL[dia]}. 🎉</div>`; return; }
+
+  let html = `<div class="hint" style="margin-bottom:12px;">${fuera.length} cliente(s) con ventas de <b>${fechaLabel}</b> que no tienen entrega marcada para <b>${DIA_LABEL[dia]}</b>${vendedorFiltro ? ' · vendedor: '+escapeHtml(vendedorFiltro) : ''}.</div>`;
+  html += '<table><thead><tr><th class="mono">Cód. Cliente</th><th>Cliente</th><th>Vendedor(es)</th><th>Ruta</th><th class="mono">Importe vendido</th><th></th></tr></thead><tbody>';
+  fuera.forEach(f => {
+    html += `<tr>
+      <td class="mono">${f.codCliente}</td>
+      <td class="strong">${escapeHtml(f.cliente)}</td>
+      <td>${escapeHtml(f.vendedores)}</td>
+      <td>${escapeHtml(f.ruta)}</td>
+      <td class="mono">${fmtMoney(f.importe)}</td>
+      <td>${f.enBase ? '' : '<span class="badge" style="color:var(--red);border-color:var(--red);">no está en la base de días de visita</span>'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function exportFueraDeRutaExcel(){
+  const dia = document.getElementById('fuera-ruta-dia').value;
+  if(!dia) return;
+  const vendedorFiltro = document.getElementById('fuera-ruta-vendedor').value;
+  const fechaFiltro = document.getElementById('fuera-ruta-fecha').value;
+  const fuera = computeFueraDeRuta(dia, vendedorFiltro, fechaFiltro);
+  const header = ['Cód. Cliente','Cliente','Vendedor(es)','Ruta','Importe vendido','En base de días de visita'];
+  const aoa = [header, ...fuera.map(f => [f.codCliente, f.cliente, f.vendedores, f.ruta, f.importe, f.enBase ? 'Sí' : 'No'])];
+  const fechaTag = fechaFiltro || 'todas';
+  exportToExcel(`fuera_de_ruta_${DIA_LABEL[dia]}_${fechaTag}_${todayStamp()}.xlsx`, 'Fuera de ruta', aoa);
+}
+
+/* ============================================================
+   TAB: COMPRADORES DEL MES
+   ============================================================ */
+// La base de venta acumulada del mes (Paso 5, ej: 1 al 24) y la base de
+// ventas (Paso 2, ej: 25 en adelante) juntas cubren el mes completo — los
+// flags de "ya compró" se calculan combinando ambas.
+let MONTHLY_SALES_ROWS = []; // [{codCliente, fecha, marcaCod, calibreCod, unCod}]
+
+function processMonthlyFile(file){
+  const statusEl = document.getElementById('status-mensual');
+  statusEl.innerHTML = 'Leyendo…';
+  readFileAsRows(file).then(rows => {
+    const dataRows = rows.slice(1);
+    const out = [];
+    dataRows.forEach(r => {
+      if(!r || r.length < COL.UNIDAD_NEGOCIO_COD+1) return;
+      const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
+      if(!codCliente) return;
+      const marcaCod = parseInt(r[COL.MARCA_COD], 10);
+      const calibreCod = parseInt(r[COL.CALIBRE_COD], 10);
+      const unCod = parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10);
+      if(!marcaCod && !unCod) return; // fila sin datos de producto, la salteamos
+      out.push({
+        codCliente, fecha: r[COL.FECHA], marcaCod, calibreCod, unCod,
+        vendedor: String(r[COL.VENDEDOR_DESC]||'').trim(),
+        cliente: String(r[COL.CLIENTE_DESC]||'').trim()
+      });
+    });
+    MONTHLY_SALES_ROWS = out;
+    const clientesDistintos = new Set(out.map(r => r.codCliente)).size;
+    statusEl.innerHTML = `<span class="status-ok">✓ ${out.length.toLocaleString('es-AR')} renglones procesados · ${clientesDistintos.toLocaleString('es-AR')} clientes distintos</span>`;
+    renderCompradoresMes();
+  }).catch(err => {
+    statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
+  });
+}
+
+const WEEKDAY_FROM_GETDAY = {0:'DO',1:'LU',2:'MA',3:'MI',4:'JU',5:'VI',6:'SA'};
+function weekdayKeyFromDate(dateStr){
+  // dateStr 'YYYY-MM-DD' -> clave de día (LU..DO), calculado a partir de la fecha real
+  const d = new Date(dateStr + 'T00:00:00');
+  return WEEKDAY_FROM_GETDAY[d.getDay()];
+}
+
+function populateCompradoresFiltros(){
+  const selFecha = document.getElementById('compradores-fecha');
+  const actualFecha = selFecha.value;
+  const fechas = Array.from(new Set(PEDIDOS_ROWS.map(p => dateKeyOf(p.fecha)).filter(Boolean))).sort();
+  selFecha.innerHTML = '<option value="">Elegí una fecha…</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')} (${DIA_LABEL[weekdayKeyFromDate(f)]})</option>`).join('');
+  if(fechas.includes(actualFecha)) selFecha.value = actualFecha;
+
+  const selVend = document.getElementById('compradores-vendedor');
+  const actualVend = selVend.value;
+  // vendedores de la base de pedidos + los del maestro de clientes activos (así se puede
+  // elegir a un vendedor aunque no tenga ningún pedido cargado ese día)
+  const vistos = new Map();
+  const sumar = v => { const k = normText(v); if(k && !vistos.has(k)) vistos.set(k, String(v).replace(/\s+/g,' ').trim()); };
+  PEDIDOS_ROWS.forEach(p => sumar(p.vendedor));
+  CLIENTES_ACTIVOS.forEach(c => sumar(c.vendedor));
+  const vendedores = Array.from(vistos.values()).sort((a,b) => a.localeCompare(b,'es'));
+  selVend.innerHTML = '<option value="">Todos</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(vendedores.includes(actualVend)) selVend.value = actualVend;
+}
+
+function flagBadge(v){ return v ? '<span class="flag-si">SÍ</span>' : '<span class="flag-no">NO</span>'; }
+
+function computeClientMonthFlags(){
+  // combina Paso 5 (acumulado, ej: 1 al 24) + Paso 2 (base de ventas, ej: 25 en
+  // adelante) — entre las dos cubren el mes completo
+  const flags = new Map();
+  const apply = (codCliente, marcaCod, calibreCod, unCod) => {
+    if(!flags.has(codCliente)) flags.set(codCliente, { cerveza:false, ung:false, laton1890:false, michelob:false, pureGold:false });
+    const f = flags.get(codCliente);
+    if(unCod === 1) f.cerveza = true;
+    if(unCod === 3) f.ung = true;
+    if(marcaCod === 142 && calibreCod === 566) f.laton1890 = true;
+    if(marcaCod === 531) f.michelob = true;
+    if(marcaCod === 817) f.pureGold = true;
+  };
+  MONTHLY_SALES_ROWS.forEach(r => apply(r.codCliente, r.marcaCod, r.calibreCod, r.unCod));
+  ALL_SALES_RAW.forEach(r => apply(r.codCliente, r.marcaCod, r.calibreCod, r.unCod));
+  return flags;
+}
+
+let CLIENTES_ACTIVOS = new Map(); // codCliente -> {razonSocial, vendedor, ruta}
+
+function processClientesActivosFile(file){
+  const statusEl = document.getElementById('status-activos');
+  statusEl.innerHTML = 'Leyendo…';
+  readFileAsRows(file).then(rows => {
+    if(!rows.length){ statusEl.innerHTML = '<span class="status-warn">Archivo vacío.</span>'; return; }
+    const h = rows[0].map(c => normText(c));
+    const iCliente = h.findIndex(c => c === 'CLIENTE');
+    const iRazon = h.findIndex(c => c === 'RAZON SOCIAL');
+    const iVend = h.findIndex(c => c.includes('DESCRIPCION PERSONAL COMERCIAL'));
+    const iRuta = h.findIndex(c => c.includes('DESCRIPCION RUTA DE VENTA'));
+    const iAnulado = h.findIndex(c => c === 'ANULADO');
+    if(iCliente === -1 || iVend === -1){
+      statusEl.innerHTML = '<span class="status-warn">No reconocí las columnas "Cliente" y "Fuerza de venta 1 Descripcion personal comercial" en este archivo.</span>';
+      return;
+    }
+    const clean = s => String(s == null ? '' : s).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    const map = new Map();
+    let anulados = 0;
+    for(let i=1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r) continue;
+      const code = parseInt(r[iCliente], 10);
+      if(!code) continue;
+      if(iAnulado >= 0 && normText(r[iAnulado]) === 'SI'){ anulados++; continue; }
+      map.set(code, {
+        razonSocial: iRazon >= 0 ? clean(r[iRazon]) : '',
+        vendedor: clean(r[iVend]),
+        ruta: iRuta >= 0 ? clean(r[iRuta]) : ''
+      });
+    }
+    CLIENTES_ACTIVOS = map;
+    const conVend = Array.from(map.values()).filter(c => c.vendedor).length;
+    let msg = `<span class="status-ok">✓ ${map.size.toLocaleString('es-AR')} clientes leídos · ${conVend.toLocaleString('es-AR')} con vendedor asignado</span>`;
+    if(anulados) msg += `<div class="hint">${anulados} cliente(s) anulados se ignoraron.</div>`;
+    if(conVend < map.size) msg += `<div class="hint">${(map.size - conVend).toLocaleString('es-AR')} cliente(s) no tienen vendedor asignado en este archivo.</div>`;
+    statusEl.innerHTML = msg;
+    populateCompradoresFiltros();
+    renderCompradoresMes();
+    renderFueraDeRuta();
+  }).catch(err => {
+    statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
+  });
+}
+
+function tsOf(f){
+  const t = f instanceof Date ? f.getTime() : (f ? new Date(f).getTime() : 0);
+  return isNaN(t) ? 0 : t;
+}
+
+function buildClientDirectory(){
+  // codCliente -> {nombre, vendedor, ruta}.
+  // Fuente principal: maestro de clientes activos (Paso 6). Si un cliente no está ahí
+  // (o no tiene vendedor), se completa con el vendedor más reciente que figura en
+  // Paso 5 (acumulado), Paso 2 (ventas) y Paso 3 (pedidos).
+  const dir = new Map();
+  CLIENTES_ACTIVOS.forEach((c, code) => {
+    dir.set(code, { nombre: c.razonSocial, vendedor: c.vendedor, ruta: c.ruta, ts: c.vendedor ? Infinity : -1 });
+  });
+  const consider = (code, nombre, vendedor, fecha) => {
+    if(!code) return;
+    const ts = tsOf(fecha);
+    const cur = dir.get(code);
+    if(!cur){
+      dir.set(code, { nombre: nombre || '', vendedor: vendedor || '', ruta: '', ts: vendedor ? ts : -1 });
+      return;
+    }
+    if(!cur.nombre && nombre) cur.nombre = nombre;
+    if(vendedor && ts >= cur.ts){ cur.vendedor = vendedor; cur.ts = ts; }
+  };
+  MONTHLY_SALES_ROWS.forEach(r => consider(r.codCliente, r.cliente, r.vendedor, r.fecha));
+  ALL_SALES_RAW.forEach(r => consider(r.codCliente, r.cliente, r.vendedor, r.fecha));
+  PEDIDOS_ROWS.forEach(p => consider(p.clienteCode, p.clienteNombre, p.vendedor, p.fecha));
+  return dir;
+}
+
+function computeCompradoresMes(fecha, vendedorFiltro){
+  const clientMonthFlags = computeClientMonthFlags();
+  const pedidosDia = PEDIDOS_ROWS.filter(p => dateKeyOf(p.fecha) === fecha && (!vendedorFiltro || normText(p.vendedor) === normText(vendedorFiltro)));
+  // un cliente puede tener más de un pedido ese día (distintos renglones/pedidos) — nos quedamos con uno por cliente
+  const porCliente = new Map();
+  pedidosDia.forEach(p => {
+    if(p.clienteCode === null) return;
+    if(!porCliente.has(p.clienteCode)) porCliente.set(p.clienteCode, { codCliente: p.clienteCode, cliente: p.clienteNombre, vendedores: new Set() });
+    porCliente.get(p.clienteCode).vendedores.add(p.vendedor);
+  });
+  const conPedido = Array.from(porCliente.values()).map(c => {
+    const flags = clientMonthFlags.get(c.codCliente) || { cerveza:false, ung:false, laton1890:false, michelob:false, pureGold:false };
+    return {
+      codCliente: c.codCliente, cliente: c.cliente,
+      vendedor: Array.from(c.vendedores).join(', '),
+      ...flags, oportunidadUng: flags.cerveza && !flags.ung
+    };
+  });
+  conPedido.sort((a,b) => (b.oportunidadUng - a.oportunidadUng) || a.cliente.localeCompare(b.cliente,'es'));
+
+  // clientes con entrega ese día (según BEES ONE) que NO tienen ningún pedido ese día.
+  // BEES ONE no trae vendedor, así que se toma del vendedor más reciente del cliente
+  // en las demás bases; con un vendedor elegido arriba, se muestran solo sus clientes.
+  let sinPedido = [];
+  let sinVendedorConocido = 0;
+  if(fecha){
+    const dia = weekdayKeyFromDate(fecha);
+    // ojo: los pedidos del día se toman de TODOS los vendedores (no del filtro), así un
+    // cliente con pedido cargado por otro vendedor no aparece como "sin pedido"
+    const idsConPedido = new Set(PEDIDOS_ROWS.filter(p => dateKeyOf(p.fecha) === fecha && p.clienteCode !== null).map(p => p.clienteCode));
+    const dir = buildClientDirectory();
+    const filtroNorm = normText(vendedorFiltro);
+    VISITA_MAP.forEach((info, code) => {
+      if(!info.entrega[dia]) return;
+      if(idsConPedido.has(code)) return;
+      const d = dir.get(code);
+      const vendedor = d ? d.vendedor : '';
+      if(vendedorFiltro){
+        if(!vendedor){ sinVendedorConocido++; return; }
+        if(normText(vendedor) !== filtroNorm) return;
+      }
+      sinPedido.push({ codCliente: code, razonSocial: (d && d.nombre) || info.razonSocial || '', vendedor, ruta: (d && d.ruta) || info.ruta || '' });
+    });
+    sinPedido.sort((a,b) => {
+      if(!a.vendedor !== !b.vendedor) return a.vendedor ? -1 : 1; // los sin vendedor conocido al final
+      return a.vendedor.localeCompare(b.vendedor,'es') || a.codCliente - b.codCliente;
+    });
+  }
+
+  return { conPedido, sinPedido, sinVendedorConocido };
+}
+
+function renderCompradoresMes(){
+  const elMain = document.getElementById('table-compradores-mes');
+  const elSin = document.getElementById('table-compradores-sin-pedido');
+  const fecha = document.getElementById('compradores-fecha').value;
+  const vendedorFiltro = document.getElementById('compradores-vendedor').value;
+
+  if(!PEDIDOS_ROWS.length){ elMain.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; elSin.innerHTML=''; return; }
+  if(!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length){ elMain.innerHTML = '<div class="empty-state">Subí la venta acumulada del mes (Paso 5) y/o la base de ventas (Paso 2).</div>'; elSin.innerHTML=''; return; }
+  if(!fecha){ elMain.innerHTML = '<div class="empty-state">Elegí una fecha arriba.</div>'; elSin.innerHTML=''; return; }
+
+  const { conPedido, sinPedido, sinVendedorConocido } = computeCompradoresMes(fecha, vendedorFiltro);
+
+  if(!conPedido.length){
+    elMain.innerHTML = '<div class="empty-state">No hay pedidos para esa fecha (con este filtro de vendedor).</div>';
+  } else {
+    let html = '<table><thead><tr><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th><th>Cerveza</th><th>UNG</th><th>Latón 1890</th><th>Michelob</th><th>Pure Gold</th></tr></thead><tbody>';
+    conPedido.forEach(c => {
+      html += `<tr class="${c.oportunidadUng ? 'flag-oportunidad' : ''}">
+        <td class="mono">${c.codCliente}</td>
+        <td class="strong">${escapeHtml(c.cliente)}</td>
+        <td>${escapeHtml(c.vendedor)}</td>
+        <td>${flagBadge(c.cerveza)}</td>
+        <td>${flagBadge(c.ung)}</td>
+        <td>${flagBadge(c.laton1890)}</td>
+        <td>${flagBadge(c.michelob)}</td>
+        <td>${flagBadge(c.pureGold)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += '<div class="hint">Resaltado en color: compró cerveza pero todavía no compró UNG este mes — oportunidad para ofrecerle.</div>';
+    elMain.innerHTML = html;
+  }
+
+  if(!VISITA_MAP.size){
+    elSin.innerHTML = '<div class="empty-state">Subí la base de días de entrega (Paso 4) para ver esto.</div>';
+  } else if(!sinPedido.length){
+    const quien = vendedorFiltro ? ` de ${escapeHtml(vendedorFiltro)}` : '';
+    let msg = `<div class="empty-state">Todos los clientes${quien} con entrega para ${DIA_LABEL[weekdayKeyFromDate(fecha)]} tienen un pedido cargado. 🎉</div>`;
+    if(sinVendedorConocido) msg += `<div class="hint">${sinVendedorConocido} cliente(s) con entrega ese día y sin pedido no se pudieron asignar a ningún vendedor (no aparecen en las otras bases).</div>`;
+    elSin.innerHTML = msg;
+  } else {
+    const hayRuta = sinPedido.some(s => s.ruta);
+    let html2 = `<div class="hint" style="margin-bottom:12px;">${sinPedido.length} cliente(s) con entrega el <b>${DIA_LABEL[weekdayKeyFromDate(fecha)]}</b> sin pedido cargado${vendedorFiltro ? ' · vendedor: <b>'+escapeHtml(vendedorFiltro)+'</b>' : ''}.</div>`;
+    html2 += '<table><thead><tr><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th>' + (hayRuta ? '<th>Ruta</th>' : '') + '</tr></thead><tbody>';
+    sinPedido.forEach(s => {
+      html2 += `<tr><td class="mono">${s.codCliente}</td><td class="strong">${escapeHtml(s.razonSocial || '(sin razón social en las bases)')}</td><td>${s.vendedor ? escapeHtml(s.vendedor) : '<span class="badge">sin vendedor identificado</span>'}</td>${hayRuta ? '<td>'+escapeHtml(s.ruta)+'</td>' : ''}</tr>`;
+    });
+    html2 += '</tbody></table>';
+    html2 += '<div class="hint">' + (CLIENTES_ACTIVOS.size ? 'El vendedor y la ruta salen del maestro de clientes activos (Paso 6); si un cliente no está ahí, se usa el vendedor de su última venta o pedido.' : 'El vendedor sale de la última venta o pedido de cada cliente en las bases cargadas (BEES ONE no trae vendedor). Subí el maestro de clientes activos (Paso 6) para asignarlo con precisión.') + (vendedorFiltro && sinVendedorConocido ? ` Quedaron afuera ${sinVendedorConocido} cliente(s) que no se pudieron asignar a ningún vendedor.` : '') + '</div>';
+    elSin.innerHTML = html2;
+  }
+}
+
+function exportCompradoresMesExcel(){
+  const fecha = document.getElementById('compradores-fecha').value;
+  if(!fecha) return;
+  const vendedorFiltro = document.getElementById('compradores-vendedor').value;
+  const { conPedido, sinPedido } = computeCompradoresMes(fecha, vendedorFiltro);
+
+  const header1 = ['Cód. Cliente','Razón Social','Vendedor','Cerveza','UNG','Latón 1890','Michelob','Pure Gold','Oportunidad UNG'];
+  const aoa1 = [header1, ...conPedido.map(c => [c.codCliente, c.cliente, c.vendedor, c.cerveza?'Sí':'No', c.ung?'Sí':'No', c.laton1890?'Sí':'No', c.michelob?'Sí':'No', c.pureGold?'Sí':'No', c.oportunidadUng?'Sí':'No'])];
+
+  const header2 = ['Cód. Cliente','Razón Social','Vendedor','Ruta'];
+  const aoa2 = [header2, ...sinPedido.map(s => [s.codCliente, s.razonSocial, s.vendedor, s.ruta])];
+
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, 'Compradores');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Sin pedido');
+  XLSX.writeFile(wb, `compradores_mes_${fecha}_${todayStamp()}.xlsx`);
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+function setTab(tabId){
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = (p.id === 'tab-'+tabId) ? '' : 'none');
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function setupDropzone(zoneId, inputId, onFile){
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if(input.files[0]) onFile(input.files[0]); });
+  ['dragover','dragenter'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('drag'); }));
+  zone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer.files[0];
+    if(f){ input.files = e.dataTransfer.files; onFile(f); }
+  });
+}
+
+document.getElementById('btn-process-min').addEventListener('click', processMinTable);
+setupDropzone('dz-min', 'file-min', () => processMinTable());
+setupDropzone('dz-sales', 'file-sales', (f) => processSalesFile(f));
+setupDropzone('dz-pedidos', 'file-pedidos', (f) => processPedidosFile(f));
+setupDropzone('dz-visita', 'file-visita', (f) => processVisitaFile(f));
+setupDropzone('dz-mensual', 'file-mensual', (f) => processMonthlyFile(f));
+setupDropzone('dz-activos', 'file-activos', (f) => processClientesActivosFile(f));
+
+document.getElementById('filter-marca').addEventListener('change', renderAll);
+document.getElementById('filter-pack').addEventListener('change', renderAll);
+document.getElementById('filter-canal').addEventListener('change', renderAll);
+document.getElementById('filter-cliente').addEventListener('input', renderAll);
+document.getElementById('filter-estado').addEventListener('change', renderAll);
+document.getElementById('btn-reset-filters').addEventListener('click', () => {
+  document.getElementById('filter-marca').value = '';
+  document.getElementById('filter-pack').value = '';
+  document.getElementById('filter-canal').value = '';
+  document.getElementById('filter-cliente').value = '';
+  document.getElementById('filter-estado').value = '';
+  activeVendorFilter = '';
+  renderAll();
+});
+
+document.getElementById('dup-dias').addEventListener('input', renderDuplicados);
+document.getElementById('dup-tolerancia').addEventListener('input', renderDuplicados);
+document.getElementById('btn-refresh-dup').addEventListener('click', renderDuplicados);
+document.getElementById('btn-export-dup').addEventListener('click', exportDuplicadosExcel);
+
+document.getElementById('extra-topn').addEventListener('input', renderExtraordinarias);
+document.getElementById('btn-refresh-extra').addEventListener('click', renderExtraordinarias);
+document.getElementById('btn-export-extra').addEventListener('click', exportExtraordinariasExcel);
+
+document.getElementById('fuera-ruta-dia').addEventListener('change', renderFueraDeRuta);
+document.getElementById('fuera-ruta-vendedor').addEventListener('change', renderFueraDeRuta);
+document.getElementById('fuera-ruta-fecha').addEventListener('change', renderFueraDeRuta);
+document.getElementById('btn-export-fuera-ruta').addEventListener('click', exportFueraDeRutaExcel);
+
+document.getElementById('compradores-fecha').addEventListener('change', renderCompradoresMes);
+document.getElementById('compradores-vendedor').addEventListener('change', renderCompradoresMes);
+document.getElementById('btn-export-compradores').addEventListener('click', exportCompradoresMesExcel);
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => setTab(btn.dataset.tab));
+});
+
+</script>
+</body>
+</html>
