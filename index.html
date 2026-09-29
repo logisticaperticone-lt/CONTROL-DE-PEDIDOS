@@ -1976,11 +1976,11 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzqy93THv0K16s835HnXZxVow0GvxttzeGe6KJmBpacz2RD-flN1evUKQoTXNEOtUVkwQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbwTXg-bdT0oJAm1V49ne2XOddWyiKxs1y2tNTNyN6U4FGHa-BIsO_Q-kra9--OG4cYP5Q/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
-let SHARED_CHUNK = 400000; // caracteres por parte
+let SHARED_CHUNK = 6000; // caracteres por parte — chico a propósito: viaja adentro de una URL (ver sharedApi)
 const SHARED_LABEL = { min:'PTR Mínimo', sales:'Base de ventas', pedidos:'Pedidos', visita:'Días de entrega (BEES ONE)', mensual:'Acumulado del mes', activos:'Clientes activos' };
 
 function sharedActive(){ return !!SHARED_API_URL; }
@@ -1992,15 +1992,17 @@ function isAdminHash(){
 }
 
 async function sharedApi(payload, tries){
+  // Se usa GET (con el pedido como parámetro de la URL) y no POST: un POST al
+  // /exec de Apps Script llega con una redirección (302) que no trae los
+  // encabezados de CORS necesarios para leer la respuesta desde otro sitio, y
+  // el navegador lo corta con "Failed to fetch" antes de que el código del
+  // lado del servidor llegue a correr. GET no tiene ese problema.
   tries = tries || 2;
   let lastErr;
+  const url = SHARED_API_URL + '?req=' + encodeURIComponent(JSON.stringify(payload));
   for(let i = 0; i < tries; i++){
     try{
-      const res = await fetch(SHARED_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // "solicitud simple": evita el preflight de CORS con Apps Script
-        body: JSON.stringify(payload)
-      });
+      const res = await fetch(url);
       if(!res.ok) throw new Error('HTTP ' + res.status);
       return await res.json();
     } catch(e){
