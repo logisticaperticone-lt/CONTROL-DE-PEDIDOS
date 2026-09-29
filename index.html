@@ -1838,7 +1838,23 @@ function stepPayload(key){
     case 'sales':   return { rows: ALL_SALES_RAW };          // las perforaciones se recalculan contra el PTR al restaurar
     case 'pedidos': return { rows: PEDIDOS_ROWS };
     case 'visita':  return { map: VISITA_MAP };
-    case 'mensual': return { rows: MONTHLY_SALES_ROWS, periodo: MONTHLY_PERIODO };
+    case 'mensual': {
+      // Se compacta para no saturar Google Apps Script: 1 fila por cliente y producto foco comprado
+      const vistos = new Set();
+      const rowsCompactas = [];
+      MONTHLY_SALES_ROWS.forEach(r => {
+        const k = `${r.codCliente}|${r.marcaCod}|${r.calibreCod}|${r.unCod}|${r.esBlack?1:0}`;
+        if (!vistos.has(k)) {
+          vistos.add(k);
+          rowsCompactas.push(r);
+        }
+      });
+      return { 
+        rows: rowsCompactas, 
+        totalRenglonesOriginales: MONTHLY_SALES_ROWS.length, 
+        periodo: MONTHLY_PERIODO 
+      };
+    }
     case 'activos': return { map: CLIENTES_ACTIVOS };
   }
   return null;
@@ -1976,7 +1992,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbxsuBpoGBuVa5240ajlpkKo8_m-a9qw56igOFsX5aNxjZ6NYyBXAoxP8TAFi-ON-weawA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbyj_fxZh00S5jLIr4qey7HGJQN5krkyV0QR9aIhiW2nTRCXI9kZ8OC17H1x_u9ajioDhA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -2002,7 +2018,8 @@ function jsonpRequest(url, timeoutMs){
     const cbName = '__ccd_cb_' + Date.now().toString(36) + '_' + (__jsonpSeq++);
     const script = document.createElement('script');
     let done = false;
-    const timer = setTimeout(() => finish(reject, new Error('Tiempo de espera agotado')), timeoutMs || 30000);
+    // Cambiar 30000 por 60000:
+	const timer = setTimeout(() => finish(reject, new Error('Tiempo de espera agotado')), timeoutMs || 60000);
     function finish(fn, val){
       if(done) return;
       done = true;
