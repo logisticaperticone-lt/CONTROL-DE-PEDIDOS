@@ -96,6 +96,16 @@
   .warn-box{background:var(--red-soft);border:1px solid rgba(193,91,91,.35);border-radius:8px;padding:11px 13px;font-size:12.5px;margin-top:10px;}
   .clickable-row{cursor:pointer;}
   .clickable-row:hover{background:var(--surface-2);}
+  #admin-bar, #shared-summary{display:none;}
+  body.role-admin #admin-bar{display:block;}
+  body.role-viewer #shared-summary{display:block;}
+  body.role-viewer #steps-wrap{display:none;}
+  table.tbl-focos th{white-space:normal;line-height:1.25;vertical-align:bottom;padding:8px 6px;}
+  table.tbl-focos td{padding:8px 6px;}
+  table.tbl-focos th:nth-child(n+4), table.tbl-focos td:nth-child(n+4){text-align:center;}
+  table.tbl-focos td:nth-child(3), table.tbl-focos th:nth-child(3){min-width:150px;}
+  .clear-link{color:var(--copper);cursor:pointer;margin-left:6px;text-decoration:underline;}
+  .persist-banner{font-size:12.5px;color:var(--text-dim);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 13px;margin-bottom:14px;}
 
   .tabs{display:flex;gap:6px;margin:22px 0 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
   .tab-btn{background:transparent;border:none;color:var(--text-faint);padding:10px 4px;margin-right:14px;font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;}
@@ -119,6 +129,19 @@
 </div>
 
 <div class="wrap">
+
+  <div class="persist-banner" id="persist-banner">💾 Los archivos que cargues se guardan en este navegador y se restauran solos al abrir la página.</div>
+
+  <div class="persist-banner" id="admin-bar"><span id="admin-bar-msg"></span> <button class="ghost" id="btn-publish-all" type="button" style="margin-left:8px;display:none;">☁ Publicar todo lo pendiente</button></div>
+
+  <div class="card" id="shared-summary">
+    <div class="card-title">Datos publicados</div>
+    <div class="card-sub">Esto es lo que cargó el administrador. La página se actualiza sola cada 5 minutos, o podés tocar el botón.</div>
+    <div class="scroll-x" id="shared-summary-body"></div>
+    <div style="margin-top:12px;"><button class="ghost" id="btn-shared-refresh" type="button">↻ Actualizar datos</button></div>
+  </div>
+
+  <div id="steps-wrap">
 
   <div class="card">
     <div class="card-title"><span class="step-num">1</span>Tabla de PTR Mínimo del mes</div>
@@ -199,12 +222,15 @@ Andes	Core	Lata	24	39400
     <div class="status-line" id="status-activos"></div>
   </div>
 
+  </div><!-- /steps-wrap -->
+
   <div class="tabs">
     <button class="tab-btn active" data-tab="perforaciones" type="button">Perforaciones de Precio</button>
     <button class="tab-btn" data-tab="duplicados" type="button">Pedidos Duplicados</button>
     <button class="tab-btn" data-tab="extraordinarias" type="button">Ventas Extraordinarias</button>
     <button class="tab-btn" data-tab="fuera-ruta" type="button">Fuera de Ruta</button>
     <button class="tab-btn" data-tab="compradores-mes" type="button">Compradores del Mes</button>
+    <button class="tab-btn" data-tab="compradores-ung" type="button">Compradores del Mes UNG</button>
   </div>
 
   <!-- ============== TAB: PERFORACIONES ============== -->
@@ -375,6 +401,34 @@ Andes	Core	Lata	24	39400
     </div>
   </div>
 
+  <!-- ============== TAB: COMPRADORES DEL MES UNG ============== -->
+  <div class="tab-panel" id="tab-compradores-ung" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>Fecha de pedido ("mañana")</label>
+          <select id="compradores-ung-fecha"><option value="">Elegí una fecha…</option></select>
+        </div>
+        <div class="field">
+          <label>Vendedor</label>
+          <select id="compradores-ung-vendedor"><option value="">Todos</option></select>
+        </div>
+        <button class="ghost" id="btn-export-compradores-ung" type="button">⬇ Exportar a Excel</button>
+      </div>
+      <div class="hint">Igual que "Compradores del Mes", pero con los focos de UNG: CCC UNG, Pepsi Black, Gatorade, H2OH, Red Bull, Aguas y Jagermeister. Un SÍ significa que el cliente ya compró ese foco en el mes (acumulado del Paso 5 + base de ventas del Paso 2). La columna "Faltan" cuenta en cuántos de los 7 todavía no compró, y los que más faltan salen primero.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Clientes con pedido esa fecha</div>
+      <div class="scroll-x" id="table-compradores-ung"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Tienen entrega esa fecha pero no cargaron ningún pedido</div>
+      <div class="scroll-x" id="table-compradores-ung-sin-pedido"></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -466,6 +520,7 @@ function readFileAsRows(file){
    PASO 1: TABLA DE PTR MÍNIMO
    ============================================================ */
 let MIN_TABLE = [];   // [{marca, segmento, pack, uxb, ptrMin}]
+let MIN_SOURCE_LABEL = '';
 let UNMAPPED_MIN = [];
 
 function parsePasteToRows(text){
@@ -573,9 +628,12 @@ function processMinTable(){
       return;
     }
     MIN_TABLE = parsed;
+    MIN_SOURCE_LABEL = sourceLabel;
     UNMAPPED_MIN = parsed.filter(r => !CROSSWALK_BY_MINKEY.has(crosswalkKey(r.marca, r.pack)));
     renderMinPreview(sourceLabel);
+    rebuildSalesRows(); // las diferencias se recalculan con el PTR nuevo, sin volver a subir ventas
     tryRunCross();
+    saveStep('min');
   };
 
   if(fileInput.files && fileInput.files[0]){
@@ -620,17 +678,67 @@ function renderMinPreview(sourceLabel){
 let SALES_ROWS = []; // filas crudas cruzadas: {vendedor, cliente, ruta, marca, calibre, articulo, fecha, precio, bonif, prNeto, cant, minRow}
 let UNMAPPED_SALES_SAMPLES = new Map(); // marca|calibre no reconocidos -> count (informativo, no bloqueante)
 
+function rebuildSalesRows(){
+  // Cruza las filas de la base de ventas (ALL_SALES_RAW) contra la tabla de PTR Mínimo.
+  // Se ejecuta cada vez que cambia una de las dos, así nunca quedan diferencias
+  // calculadas con un PTR viejo (importante ahora que los datos se guardan).
+  SALES_ROWS = [];
+  UNMAPPED_SALES_SAMPLES = new Map();
+  const minByKey = new Map();
+  MIN_TABLE.forEach(m => {
+    const k = crosswalkKey(m.marca, m.pack);
+    if(m.ptrMin !== null && !minByKey.has(k)) minByKey.set(k, m);
+  });
+  let matched = 0;
+  ALL_SALES_RAW.forEach(r => {
+    const minKey = RAW_TO_MINKEY.get(rawKey(r.marca, r.calibre));
+    if(!minKey){
+      const k = r.marca + ' / ' + r.calibre;
+      UNMAPPED_SALES_SAMPLES.set(k, (UNMAPPED_SALES_SAMPLES.get(k) || 0) + 1);
+      return;
+    }
+    const minRow = minByKey.get(minKey);
+    if(!minRow) return;
+    matched++;
+    const precioFinal = r.impFinal / r.cant; // precio por bulto YA con impuestos (IVA + Internos), contra lo que se compara el PTR Mínimo
+    SALES_ROWS.push({
+      vendedor: r.vendedor,
+      cliente: r.cliente,
+      codCliente: r.codCliente,
+      canal: r.canal,
+      ruta: r.ruta || '',
+      articulo: r.articulo,
+      marca: minRow.marca,
+      pack: minRow.pack,
+      fecha: r.fecha,
+      prNeto: r.prNeto === undefined ? null : r.prNeto,
+      precioFinal,
+      cant: r.cant,
+      ptrMin: minRow.ptrMin,
+      diff: precioFinal - minRow.ptrMin
+    });
+  });
+  const el = document.getElementById('sales-matched');
+  if(el) el.textContent = matched.toLocaleString('es-AR');
+  return { matched };
+}
+
+function salesStatusHtml(totalRows, matched, verbo){
+  let msg = `<span class="status-ok">✓ ${totalRows.toLocaleString('es-AR')} filas ${verbo || 'leídas'}, <b id="sales-matched">${matched.toLocaleString('es-AR')}</b> cruzadas contra la tabla de PTR</span>`;
+  if(!MIN_TABLE.length) msg += '<div class="hint">Subí la tabla de PTR Mínimo (Paso 1) para ver las perforaciones.</div>';
+  if(UNMAPPED_SALES_SAMPLES.size){
+    const top = Array.from(UNMAPPED_SALES_SAMPLES.entries()).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    msg += `<div class="hint">Hubo combinaciones Marca/Calibre en la base de ventas que no están en tu tabla de PTR Mínimo (se ignoraron para Perforaciones, pero SÍ se usan en Ventas Extraordinarias, Fuera de Ruta y Compradores del Mes): ${top.map(([k,v])=>escapeHtml(k)+' ('+v+')').join(' · ')}${UNMAPPED_SALES_SAMPLES.size>6?'…':''}</div>`;
+  }
+  return msg;
+}
+
 function processSalesFile(file){
   const statusEl = document.getElementById('status-sales');
   statusEl.innerHTML = 'Leyendo y cruzando…';
   readFileAsRows(file).then(rows => {
-    let headerRowIdx = 0;
-    // saltea la fila de headers si la primera celda no es numérica de fecha
     const dataRows = rows.slice(1);
-    const out = [];
     const outAll = [];
-    let matched = 0, totalConsidered = 0;
-    UNMAPPED_SALES_SAMPLES = new Map();
 
     dataRows.forEach(r => {
       if(!r || r.length < COL.IMP_FINAL+1) return;
@@ -641,70 +749,38 @@ function processSalesFile(file){
       const impFinal = parseFloat(r[COL.IMP_FINAL]);
       const prNeto = parseFloat(r[COL.PRNETO]);
       if(cant <= 0 || !isFinite(impFinal) || impFinal <= 0) return;
-      const precioFinal = impFinal / cant; // precio por bulto YA con impuestos (IVA + Internos), que es contra lo que se compara el PTR Mínimo
 
       const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
-      const canal = CLIENTS_CANAL_MAP.get(codCliente) || 'SIN CLASIF';
-      const vendedor = String(r[COL.VENDEDOR_DESC]||'').trim();
-      const clienteNombre = String(r[COL.CLIENTE_DESC]||'').trim();
-      const fecha = r[COL.FECHA];
-
-      // guarda TODAS las filas válidas (más allá de si cruzan o no contra el PTR),
-      // para usar en Ventas Extraordinarias, Fuera de Ruta y Compradores del Mes
-      const marcaCod = parseInt(r[COL.MARCA_COD], 10);
-      const calibreCod = parseInt(r[COL.CALIBRE_COD], 10);
-      const unCod = parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10);
+      const articulo = String(r[COL.ARTICULO_DESC]||'').trim();
+      // guarda TODAS las filas válidas (crucen o no contra el PTR): se usan en Perforaciones
+      // (cruzando contra el PTR), Ventas Extraordinarias, Fuera de Ruta y Compradores del Mes
       outAll.push({
-        vendedor, cliente: clienteNombre, codCliente, canal,
-        marca: normText(marcaRaw), calibre: normText(calibreRaw),
-        marcaCod, calibreCod, unCod,
-        articulo: String(r[COL.ARTICULO_DESC]||'').trim(),
-        fecha, cant, impFinal
-      });
-
-      const key = rawKey(marcaRaw, calibreRaw);
-      const minKey = RAW_TO_MINKEY.get(key);
-      if(!minKey){
-        UNMAPPED_SALES_SAMPLES.set(normText(marcaRaw)+' / '+normText(calibreRaw), (UNMAPPED_SALES_SAMPLES.get(normText(marcaRaw)+' / '+normText(calibreRaw))||0)+1);
-        return;
-      }
-      const minRow = MIN_TABLE.find(m => crosswalkKey(m.marca, m.pack) === minKey);
-      if(!minRow || minRow.ptrMin === null) return;
-
-      totalConsidered++;
-      matched++;
-      out.push({
-        vendedor,
-        cliente: clienteNombre,
-        codCliente: codCliente,
-        canal: canal,
+        vendedor: String(r[COL.VENDEDOR_DESC]||'').trim(),
+        cliente: String(r[COL.CLIENTE_DESC]||'').trim(),
+        codCliente,
+        canal: CLIENTS_CANAL_MAP.get(codCliente) || 'SIN CLASIF',
         ruta: String(r[COL.RUTA_DESC]||'').trim(),
-        articulo: String(r[COL.ARTICULO_DESC]||'').trim(),
-        marca: minRow.marca,
-        pack: minRow.pack,
-        fecha: fecha,
+        marca: normText(marcaRaw), calibre: normText(calibreRaw),
+        marcaCod: parseInt(r[COL.MARCA_COD], 10),
+        calibreCod: parseInt(r[COL.CALIBRE_COD], 10),
+        unCod: parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10),
+        esBlack: normText(articulo).includes('BLACK'),
+        articulo,
         prNeto: isFinite(prNeto) ? prNeto : null,
-        precioFinal: precioFinal,
-        cant: cant,
-        ptrMin: minRow.ptrMin,
-        diff: precioFinal - minRow.ptrMin
+        fecha: r[COL.FECHA], cant, impFinal
       });
     });
 
-    SALES_ROWS = out;
     ALL_SALES_RAW = outAll;
-    let msg = `<span class="status-ok">✓ ${dataRows.length.toLocaleString('es-AR')} filas leídas, ${matched.toLocaleString('es-AR')} cruzadas contra la tabla de PTR</span>`;
-    if(UNMAPPED_SALES_SAMPLES.size){
-      const top = Array.from(UNMAPPED_SALES_SAMPLES.entries()).sort((a,b)=>b[1]-a[1]).slice(0,6);
-      msg += `<div class="hint">Hubo combinaciones Marca/Calibre en la base de ventas que no están en tu tabla de PTR Mínimo (se ignoraron para Perforaciones, pero SÍ se usan en Ventas Extraordinarias y Fuera de Ruta): ${top.map(([k,v])=>escapeHtml(k)+' ('+v+')').join(' · ')}${UNMAPPED_SALES_SAMPLES.size>6?'…':''}</div>`;
-    }
-    statusEl.innerHTML = msg;
+    const { matched } = rebuildSalesRows();
+    statusEl.innerHTML = salesStatusHtml(dataRows.length, matched);
     tryRunCross();
     renderExtraordinarias();
     populateFueraRutaVendedorFilter();
     populateFueraRutaFechaFilter();
     renderFueraDeRuta();
     renderCompradoresMes();
+    saveStep('sales');
   }).catch(err => {
     statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
   });
@@ -1007,6 +1083,7 @@ function processPedidosFile(file){
     renderExtraordinarias();
     populateCompradoresFiltros();
     renderCompradoresMes();
+    saveStep('pedidos');
   }).catch(err => {
     statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
   });
@@ -1205,6 +1282,7 @@ function processVisitaFile(file){
       statusEl.innerHTML = msg;
       renderFueraDeRuta();
       renderCompradoresMes();
+      saveStep('visita');
       return;
     }
 
@@ -1241,6 +1319,7 @@ function processVisitaFile(file){
     statusEl.innerHTML = `<span class="status-ok">✓ ${VISITA_MAP.size.toLocaleString('es-AR')} clientes leídos</span>`;
     renderFueraDeRuta();
     renderCompradoresMes();
+    saveStep('visita');
   }).catch(err => {
     statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
   });
@@ -1338,6 +1417,7 @@ function exportFueraDeRutaExcel(){
 // ventas (Paso 2, ej: 25 en adelante) juntas cubren el mes completo — los
 // flags de "ya compró" se calculan combinando ambas.
 let MONTHLY_SALES_ROWS = []; // [{codCliente, fecha, marcaCod, calibreCod, unCod}]
+let MONTHLY_PERIODO = '';    // ej: 'SEP 2026' — el acumulado viene por mes, no por día
 
 function processMonthlyFile(file){
   const statusEl = document.getElementById('status-mensual');
@@ -1345,6 +1425,7 @@ function processMonthlyFile(file){
   readFileAsRows(file).then(rows => {
     const dataRows = rows.slice(1);
     const out = [];
+    let periodo = '';
     dataRows.forEach(r => {
       if(!r || r.length < COL.UNIDAD_NEGOCIO_COD+1) return;
       const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
@@ -1353,16 +1434,20 @@ function processMonthlyFile(file){
       const calibreCod = parseInt(r[COL.CALIBRE_COD], 10);
       const unCod = parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10);
       if(!marcaCod && !unCod) return; // fila sin datos de producto, la salteamos
+      if(!periodo) periodo = String(r[0] || '').replace(/^\(\d+\)\s*/, '').trim(); // "(001) SEP 2026" -> "SEP 2026"
       out.push({
         codCliente, fecha: r[COL.FECHA], marcaCod, calibreCod, unCod,
         vendedor: String(r[COL.VENDEDOR_DESC]||'').trim(),
-        cliente: String(r[COL.CLIENTE_DESC]||'').trim()
+        cliente: String(r[COL.CLIENTE_DESC]||'').trim(),
+        esBlack: normText(r[COL.ARTICULO_DESC]).includes('BLACK')
       });
     });
     MONTHLY_SALES_ROWS = out;
+    MONTHLY_PERIODO = periodo;
     const clientesDistintos = new Set(out.map(r => r.codCliente)).size;
-    statusEl.innerHTML = `<span class="status-ok">✓ ${out.length.toLocaleString('es-AR')} renglones procesados · ${clientesDistintos.toLocaleString('es-AR')} clientes distintos</span>`;
+    statusEl.innerHTML = `<span class="status-ok">✓ ${out.length.toLocaleString('es-AR')} renglones procesados · ${clientesDistintos.toLocaleString('es-AR')} clientes distintos${periodo ? ' · período ' + escapeHtml(periodo) : ''}</span>`;
     renderCompradoresMes();
+    saveStep('mensual');
   }).catch(err => {
     statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
   });
@@ -1375,45 +1460,87 @@ function weekdayKeyFromDate(dateStr){
   return WEEKDAY_FROM_GETDAY[d.getDay()];
 }
 
-function populateCompradoresFiltros(){
-  const selFecha = document.getElementById('compradores-fecha');
-  const actualFecha = selFecha.value;
-  const fechas = Array.from(new Set(PEDIDOS_ROWS.map(p => dateKeyOf(p.fecha)).filter(Boolean))).sort();
-  selFecha.innerHTML = '<option value="">Elegí una fecha…</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')} (${DIA_LABEL[weekdayKeyFromDate(f)]})</option>`).join('');
-  if(fechas.includes(actualFecha)) selFecha.value = actualFecha;
+// Definición de los "focos" de cada pestaña de compradores. Cada foco es un SÍ/NO por cliente:
+// ¿compró algo que cumpla `test` en el mes? (acumulado del Paso 5 + base de ventas del Paso 2).
+// row = {marcaCod, calibreCod, unCod, esBlack}
+const COMPRADORES_MES_CFG = {
+  id: 'mes', file: 'compradores_mes',
+  fechaId: 'compradores-fecha', vendId: 'compradores-vendedor',
+  mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores',
+  focos: [
+    { key:'cerveza',   label:'Cerveza',    test: r => r.unCod === 1 },                               // Unidad de Negocio (AI) = 1
+    { key:'ung',       label:'UNG',        test: r => r.unCod === 3 },                               // Unidad de Negocio (AI) = 3
+    { key:'laton1890', label:'Latón 1890', test: r => r.marcaCod === 142 && r.calibreCod === 566 },  // Marca (T) 142 + Calibre (W) 566
+    { key:'michelob',  label:'Michelob',   test: r => r.marcaCod === 531 },                          // Marca (T) 531
+    { key:'pureGold',  label:'Pure Gold',  test: r => r.marcaCod === 817 }                           // Marca (T) 817
+  ],
+  highlight: f => f.cerveza && !f.ung,
+  highlightLabel: 'Oportunidad UNG',
+  hint: 'Resaltado en color: compró cerveza pero todavía no compró UNG este mes — oportunidad para ofrecerle.'
+};
+const COMPRADORES_UNG_CFG = {
+  id: 'ung', file: 'compradores_mes_ung',
+  fechaId: 'compradores-ung-fecha', vendId: 'compradores-ung-vendedor',
+  mainId: 'table-compradores-ung', sinId: 'table-compradores-ung-sin-pedido', exportId: 'btn-export-compradores-ung',
+  focos: [
+    { key:'cccUng',     label:'CCC UNG',         test: r => r.unCod === 3 },       // Unidad de Negocio (AI) = 3
+    { key:'pepsiBlack', label:'CCC Pepsi Black', test: r => r.esBlack === true },  // columna S (artículo) contiene "BLACK"
+    { key:'gatorade',   label:'CCC Gatorade',    test: r => r.marcaCod === 15 },   // Marca (T) 15
+    { key:'h2oh',       label:'CCC H2OH',        test: r => r.marcaCod === 95 },   // Marca (T) 95
+    { key:'redBull',    label:'CCC Red Bull',    test: r => r.marcaCod === 358 },  // Marca (T) 358
+    { key:'aguas',      label:'CCC Aguas',       test: r => r.unCod === 4 },       // Unidad de Negocio (AI) = 4
+    { key:'jager',      label:'CCC Jagermeister',test: r => r.marcaCod === 787 }   // Marca (T) 787
+  ],
+  highlight: null,
+  sortByFaltan: true,
+  compact: true, // 7 focos + Faltan: encabezados en 2 líneas y columnas más angostas para que entre sin scroll
+  hint: '"Faltan" es la cantidad de focos que el cliente todavía no compró este mes; los que más faltan salen primero.'
+};
+const COMPRADORES_CFGS = [COMPRADORES_MES_CFG, COMPRADORES_UNG_CFG];
 
-  const selVend = document.getElementById('compradores-vendedor');
-  const actualVend = selVend.value;
-  // vendedores de la base de pedidos + los del maestro de clientes activos (así se puede
-  // elegir a un vendedor aunque no tenga ningún pedido cargado ese día)
-  const vistos = new Map();
-  const sumar = v => { const k = normText(v); if(k && !vistos.has(k)) vistos.set(k, String(v).replace(/\s+/g,' ').trim()); };
-  PEDIDOS_ROWS.forEach(p => sumar(p.vendedor));
-  CLIENTES_ACTIVOS.forEach(c => sumar(c.vendedor));
-  const vendedores = Array.from(vistos.values()).sort((a,b) => a.localeCompare(b,'es'));
-  selVend.innerHTML = '<option value="">Todos</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-  if(vendedores.includes(actualVend)) selVend.value = actualVend;
+function populateCompradoresFiltros(){
+  COMPRADORES_CFGS.forEach(cfg => {
+    const selFecha = document.getElementById(cfg.fechaId);
+    const actualFecha = selFecha.value;
+    const fechas = Array.from(new Set(PEDIDOS_ROWS.map(p => dateKeyOf(p.fecha)).filter(Boolean))).sort();
+    selFecha.innerHTML = '<option value="">Elegí una fecha…</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')} (${DIA_LABEL[weekdayKeyFromDate(f)]})</option>`).join('');
+    if(fechas.includes(actualFecha)) selFecha.value = actualFecha;
+
+    const selVend = document.getElementById(cfg.vendId);
+    const actualVend = selVend.value;
+    // vendedores de la base de pedidos + los del maestro de clientes activos (así se puede
+    // elegir a un vendedor aunque no tenga ningún pedido cargado ese día)
+    const vistos = new Map();
+    const sumar = v => { const k = normText(v); if(k && !vistos.has(k)) vistos.set(k, String(v).replace(/\s+/g,' ').trim()); };
+    PEDIDOS_ROWS.forEach(p => sumar(p.vendedor));
+    CLIENTES_ACTIVOS.forEach(c => sumar(c.vendedor));
+    const vendedores = Array.from(vistos.values()).sort((a,b) => a.localeCompare(b,'es'));
+    selVend.innerHTML = '<option value="">Todos</option>' + vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(vendedores.includes(actualVend)) selVend.value = actualVend;
+  });
 }
 
 function flagBadge(v){ return v ? '<span class="flag-si">SÍ</span>' : '<span class="flag-no">NO</span>'; }
 
-function computeClientMonthFlags(){
+function computeClientFlags(cfg){
   // combina Paso 5 (acumulado, ej: 1 al 24) + Paso 2 (base de ventas, ej: 25 en
   // adelante) — entre las dos cubren el mes completo
   const flags = new Map();
-  const apply = (codCliente, marcaCod, calibreCod, unCod) => {
-    if(!flags.has(codCliente)) flags.set(codCliente, { cerveza:false, ung:false, laton1890:false, michelob:false, pureGold:false });
-    const f = flags.get(codCliente);
-    if(unCod === 1) f.cerveza = true;
-    if(unCod === 3) f.ung = true;
-    if(marcaCod === 142 && calibreCod === 566) f.laton1890 = true;
-    if(marcaCod === 531) f.michelob = true;
-    if(marcaCod === 817) f.pureGold = true;
+  const apply = r => {
+    if(!r.codCliente) return;
+    let f = flags.get(r.codCliente);
+    if(!f){
+      f = {};
+      cfg.focos.forEach(fo => { f[fo.key] = false; });
+      flags.set(r.codCliente, f);
+    }
+    cfg.focos.forEach(fo => { if(!f[fo.key] && fo.test(r)) f[fo.key] = true; });
   };
-  MONTHLY_SALES_ROWS.forEach(r => apply(r.codCliente, r.marcaCod, r.calibreCod, r.unCod));
-  ALL_SALES_RAW.forEach(r => apply(r.codCliente, r.marcaCod, r.calibreCod, r.unCod));
+  MONTHLY_SALES_ROWS.forEach(apply);
+  ALL_SALES_RAW.forEach(apply);
   return flags;
 }
+function computeClientMonthFlags(){ return computeClientFlags(COMPRADORES_MES_CFG); }
 
 let CLIENTES_ACTIVOS = new Map(); // codCliente -> {razonSocial, vendedor, ruta}
 
@@ -1456,6 +1583,7 @@ function processClientesActivosFile(file){
     populateCompradoresFiltros();
     renderCompradoresMes();
     renderFueraDeRuta();
+    saveStep('activos');
   }).catch(err => {
     statusEl.innerHTML = '<span class="status-warn">Error leyendo el archivo: '+escapeHtml(String(err))+'</span>';
   });
@@ -1492,8 +1620,11 @@ function buildClientDirectory(){
   return dir;
 }
 
-function computeCompradoresMes(fecha, vendedorFiltro){
-  const clientMonthFlags = computeClientMonthFlags();
+function computeCompradoresMes(fecha, vendedorFiltro, cfg){
+  cfg = cfg || COMPRADORES_MES_CFG;
+  const clientFlags = computeClientFlags(cfg);
+  const vacios = {};
+  cfg.focos.forEach(fo => { vacios[fo.key] = false; });
   const pedidosDia = PEDIDOS_ROWS.filter(p => dateKeyOf(p.fecha) === fecha && (!vendedorFiltro || normText(p.vendedor) === normText(vendedorFiltro)));
   // un cliente puede tener más de un pedido ese día (distintos renglones/pedidos) — nos quedamos con uno por cliente
   const porCliente = new Map();
@@ -1503,18 +1634,25 @@ function computeCompradoresMes(fecha, vendedorFiltro){
     porCliente.get(p.clienteCode).vendedores.add(p.vendedor);
   });
   const conPedido = Array.from(porCliente.values()).map(c => {
-    const flags = clientMonthFlags.get(c.codCliente) || { cerveza:false, ung:false, laton1890:false, michelob:false, pureGold:false };
+    const flags = clientFlags.get(c.codCliente) || vacios;
     return {
       codCliente: c.codCliente, cliente: c.cliente,
       vendedor: Array.from(c.vendedores).join(', '),
-      ...flags, oportunidadUng: flags.cerveza && !flags.ung
+      ...flags,
+      faltan: cfg.focos.filter(fo => !flags[fo.key]).length,
+      destacar: cfg.highlight ? !!cfg.highlight(flags) : false
     };
   });
-  conPedido.sort((a,b) => (b.oportunidadUng - a.oportunidadUng) || a.cliente.localeCompare(b.cliente,'es'));
+  conPedido.sort((a,b) => {
+    if(cfg.sortByFaltan && b.faltan !== a.faltan) return b.faltan - a.faltan;
+    if(!cfg.sortByFaltan && a.destacar !== b.destacar) return a.destacar ? -1 : 1;
+    return a.cliente.localeCompare(b.cliente,'es');
+  });
 
   // clientes con entrega ese día (según BEES ONE) que NO tienen ningún pedido ese día.
-  // BEES ONE no trae vendedor, así que se toma del vendedor más reciente del cliente
-  // en las demás bases; con un vendedor elegido arriba, se muestran solo sus clientes.
+  // BEES ONE no trae vendedor, así que se toma del maestro de clientes activos (Paso 6) o, si no
+  // está ahí, del vendedor más reciente del cliente en las demás bases; con un vendedor elegido
+  // arriba, se muestran solo sus clientes.
   let sinPedido = [];
   let sinVendedorConocido = 0;
   if(fecha){
@@ -1544,39 +1682,7 @@ function computeCompradoresMes(fecha, vendedorFiltro){
   return { conPedido, sinPedido, sinVendedorConocido };
 }
 
-function renderCompradoresMes(){
-  const elMain = document.getElementById('table-compradores-mes');
-  const elSin = document.getElementById('table-compradores-sin-pedido');
-  const fecha = document.getElementById('compradores-fecha').value;
-  const vendedorFiltro = document.getElementById('compradores-vendedor').value;
-
-  if(!PEDIDOS_ROWS.length){ elMain.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; elSin.innerHTML=''; return; }
-  if(!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length){ elMain.innerHTML = '<div class="empty-state">Subí la venta acumulada del mes (Paso 5) y/o la base de ventas (Paso 2).</div>'; elSin.innerHTML=''; return; }
-  if(!fecha){ elMain.innerHTML = '<div class="empty-state">Elegí una fecha arriba.</div>'; elSin.innerHTML=''; return; }
-
-  const { conPedido, sinPedido, sinVendedorConocido } = computeCompradoresMes(fecha, vendedorFiltro);
-
-  if(!conPedido.length){
-    elMain.innerHTML = '<div class="empty-state">No hay pedidos para esa fecha (con este filtro de vendedor).</div>';
-  } else {
-    let html = '<table><thead><tr><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th><th>Cerveza</th><th>UNG</th><th>Latón 1890</th><th>Michelob</th><th>Pure Gold</th></tr></thead><tbody>';
-    conPedido.forEach(c => {
-      html += `<tr class="${c.oportunidadUng ? 'flag-oportunidad' : ''}">
-        <td class="mono">${c.codCliente}</td>
-        <td class="strong">${escapeHtml(c.cliente)}</td>
-        <td>${escapeHtml(c.vendedor)}</td>
-        <td>${flagBadge(c.cerveza)}</td>
-        <td>${flagBadge(c.ung)}</td>
-        <td>${flagBadge(c.laton1890)}</td>
-        <td>${flagBadge(c.michelob)}</td>
-        <td>${flagBadge(c.pureGold)}</td>
-      </tr>`;
-    });
-    html += '</tbody></table>';
-    html += '<div class="hint">Resaltado en color: compró cerveza pero todavía no compró UNG este mes — oportunidad para ofrecerle.</div>';
-    elMain.innerHTML = html;
-  }
-
+function renderSinPedidoTable(elSin, fecha, vendedorFiltro, sinPedido, sinVendedorConocido){
   if(!VISITA_MAP.size){
     elSin.innerHTML = '<div class="empty-state">Subí la base de días de entrega (Paso 4) para ver esto.</div>';
   } else if(!sinPedido.length){
@@ -1597,14 +1703,60 @@ function renderCompradoresMes(){
   }
 }
 
-function exportCompradoresMesExcel(){
-  const fecha = document.getElementById('compradores-fecha').value;
-  if(!fecha) return;
-  const vendedorFiltro = document.getElementById('compradores-vendedor').value;
-  const { conPedido, sinPedido } = computeCompradoresMes(fecha, vendedorFiltro);
+function renderCompradoresTab(cfg){
+  const elMain = document.getElementById(cfg.mainId);
+  const elSin = document.getElementById(cfg.sinId);
+  const fecha = document.getElementById(cfg.fechaId).value;
+  const vendedorFiltro = document.getElementById(cfg.vendId).value;
 
-  const header1 = ['Cód. Cliente','Razón Social','Vendedor','Cerveza','UNG','Latón 1890','Michelob','Pure Gold','Oportunidad UNG'];
-  const aoa1 = [header1, ...conPedido.map(c => [c.codCliente, c.cliente, c.vendedor, c.cerveza?'Sí':'No', c.ung?'Sí':'No', c.laton1890?'Sí':'No', c.michelob?'Sí':'No', c.pureGold?'Sí':'No', c.oportunidadUng?'Sí':'No'])];
+  if(!PEDIDOS_ROWS.length){ elMain.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; elSin.innerHTML=''; return; }
+  if(!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length){ elMain.innerHTML = '<div class="empty-state">Subí la venta acumulada del mes (Paso 5) y/o la base de ventas (Paso 2).</div>'; elSin.innerHTML=''; return; }
+  if(!fecha){ elMain.innerHTML = '<div class="empty-state">Elegí una fecha arriba.</div>'; elSin.innerHTML=''; return; }
+
+  const { conPedido, sinPedido, sinVendedorConocido } = computeCompradoresMes(fecha, vendedorFiltro, cfg);
+
+  if(!conPedido.length){
+    elMain.innerHTML = '<div class="empty-state">No hay pedidos para esa fecha (con este filtro de vendedor).</div>';
+  } else {
+    let html = '<table' + (cfg.compact ? ' class="tbl-focos"' : '') + '><thead><tr><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th>'
+      + cfg.focos.map(fo => `<th>${escapeHtml(fo.label)}</th>`).join('')
+      + (cfg.sortByFaltan ? '<th class="mono">Faltan</th>' : '')
+      + '</tr></thead><tbody>';
+    conPedido.forEach(c => {
+      html += `<tr class="${c.destacar ? 'flag-oportunidad' : ''}">
+        <td class="mono">${c.codCliente}</td>
+        <td class="strong">${escapeHtml(c.cliente)}</td>
+        <td>${escapeHtml(c.vendedor)}</td>
+        ${cfg.focos.map(fo => `<td>${flagBadge(c[fo.key])}</td>`).join('')}
+        ${cfg.sortByFaltan ? `<td class="mono ${c.faltan ? 'diff-neg' : 'diff-pos'}">${c.faltan}</td>` : ''}
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += `<div class="hint">${escapeHtml(cfg.hint)}</div>`;
+    elMain.innerHTML = html;
+  }
+
+  renderSinPedidoTable(elSin, fecha, vendedorFiltro, sinPedido, sinVendedorConocido);
+}
+
+function renderCompradoresMes(){
+  // refresca las dos pestañas de compradores (Mes y Mes UNG)
+  COMPRADORES_CFGS.forEach(renderCompradoresTab);
+}
+
+function exportCompradoresExcel(cfg){
+  const fecha = document.getElementById(cfg.fechaId).value;
+  if(!fecha) return;
+  const vendedorFiltro = document.getElementById(cfg.vendId).value;
+  const { conPedido, sinPedido } = computeCompradoresMes(fecha, vendedorFiltro, cfg);
+
+  const extraLabel = cfg.highlight ? cfg.highlightLabel : 'Focos que faltan';
+  const header1 = ['Cód. Cliente','Razón Social','Vendedor', ...cfg.focos.map(fo => fo.label), extraLabel];
+  const aoa1 = [header1, ...conPedido.map(c => [
+    c.codCliente, c.cliente, c.vendedor,
+    ...cfg.focos.map(fo => c[fo.key] ? 'Sí' : 'No'),
+    cfg.highlight ? (c.destacar ? 'Sí' : 'No') : c.faltan
+  ])];
 
   const header2 = ['Cód. Cliente','Razón Social','Vendedor','Ruta'];
   const aoa2 = [header2, ...sinPedido.map(s => [s.codCliente, s.razonSocial, s.vendedor, s.ruta])];
@@ -1614,7 +1766,494 @@ function exportCompradoresMesExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws1, 'Compradores');
   XLSX.utils.book_append_sheet(wb, ws2, 'Sin pedido');
-  XLSX.writeFile(wb, `compradores_mes_${fecha}_${todayStamp()}.xlsx`);
+  XLSX.writeFile(wb, `${cfg.file}_${fecha}_${todayStamp()}.xlsx`);
+}
+function exportCompradoresMesExcel(){ exportCompradoresExcel(COMPRADORES_MES_CFG); }
+
+/* ============================================================
+   PERSISTENCIA EN EL NAVEGADOR (IndexedDB)
+   ============================================================
+   Cada archivo que cargás (ya procesado) se guarda en IndexedDB, una base de datos que
+   vive en el navegador de ESTA compu: los datos no se suben a GitHub ni salen de acá.
+   Al abrir la página se restauran solos. Si abrís la página desde otra compu u otro
+   navegador, o borrás los datos del navegador, hay que volver a cargar los archivos. */
+const PERSIST_DB = 'control-comercial-diario';
+const PERSIST_STORE = 'datasets';
+const PERSIST_SCHEMA = 1; // si algún día cambia el formato de lo guardado, se sube este número
+const STEP_STATUS = { min:'status-min', sales:'status-sales', pedidos:'status-pedidos', visita:'status-visita', mensual:'status-mensual', activos:'status-activos' };
+
+function idbOpen(){
+  return new Promise((resolve, reject) => {
+    if(typeof indexedDB === 'undefined'){ reject(new Error('IndexedDB no disponible')); return; }
+    const rq = indexedDB.open(PERSIST_DB, 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore(PERSIST_STORE); };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+    rq.onblocked = () => reject(new Error('IndexedDB bloqueada'));
+  });
+}
+async function persistSave(key, value){
+  try{
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PERSIST_STORE, 'readwrite');
+      tx.objectStore(PERSIST_STORE).put({ v: PERSIST_SCHEMA, savedAt: Date.now(), value }, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('transacción abortada'));
+    });
+    db.close();
+    return true;
+  } catch(e){ console.warn('No se pudo guardar', key, e); return false; }
+}
+async function persistLoad(key){
+  try{
+    const db = await idbOpen();
+    const rec = await new Promise((resolve, reject) => {
+      const rq = db.transaction(PERSIST_STORE, 'readonly').objectStore(PERSIST_STORE).get(key);
+      rq.onsuccess = () => resolve(rq.result);
+      rq.onerror = () => reject(rq.error);
+    });
+    db.close();
+    return (rec && rec.v === PERSIST_SCHEMA) ? rec : null;
+  } catch(e){ console.warn('No se pudo leer', key, e); return null; }
+}
+async function persistDelete(key){
+  try{
+    const db = await idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PERSIST_STORE, 'readwrite');
+      tx.objectStore(PERSIST_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch(e){ console.warn('No se pudo borrar', key, e); return false; }
+}
+
+function stepPayload(key){
+  switch(key){
+    case 'min':     return { table: MIN_TABLE, source: MIN_SOURCE_LABEL };
+    case 'sales':   return { rows: ALL_SALES_RAW };          // las perforaciones se recalculan contra el PTR al restaurar
+    case 'pedidos': return { rows: PEDIDOS_ROWS };
+    case 'visita':  return { map: VISITA_MAP };
+    case 'mensual': return { rows: MONTHLY_SALES_ROWS, periodo: MONTHLY_PERIODO };
+    case 'activos': return { map: CLIENTES_ACTIVOS };
+  }
+  return null;
+}
+function stepRestore(key, v){
+  v = v || {};
+  switch(key){
+    case 'min':     MIN_TABLE = Array.isArray(v.table) ? v.table : []; MIN_SOURCE_LABEL = v.source || ''; break;
+    case 'sales':   ALL_SALES_RAW = Array.isArray(v.rows) ? v.rows : []; break;
+    case 'pedidos': PEDIDOS_ROWS = Array.isArray(v.rows) ? v.rows : []; break;
+    case 'visita':  VISITA_MAP = v.map instanceof Map ? v.map : new Map(); break;
+    case 'mensual': MONTHLY_SALES_ROWS = Array.isArray(v.rows) ? v.rows : []; MONTHLY_PERIODO = v.periodo || ''; break;
+    case 'activos': CLIENTES_ACTIVOS = v.map instanceof Map ? v.map : new Map(); break;
+  }
+}
+function stepClear(key){
+  switch(key){
+    case 'min':     MIN_TABLE = []; MIN_SOURCE_LABEL = ''; UNMAPPED_MIN = []; { const pv = document.getElementById('min-preview'); if(pv) pv.innerHTML = ''; } rebuildSalesRows(); break;
+    case 'sales':   ALL_SALES_RAW = []; SALES_ROWS = []; UNMAPPED_SALES_SAMPLES = new Map(); break;
+    case 'pedidos': PEDIDOS_ROWS = []; break;
+    case 'visita':  VISITA_MAP = new Map(); break;
+    case 'mensual': MONTHLY_SALES_ROWS = []; MONTHLY_PERIODO = ''; break;
+    case 'activos': CLIENTES_ACTIVOS = new Map(); break;
+  }
+  const el = document.getElementById(STEP_STATUS[key]);
+  if(el) el.innerHTML = '<div class="hint">Datos borrados de este navegador. Volvé a subir el archivo cuando quieras.</div>';
+}
+
+function persistNoteHtml(key, ts){
+  const when = t => new Date(t).toLocaleString('es-AR');
+  if(!sharedActive()){
+    return `<div class="hint persist-note">💾 Guardado en este navegador el ${when(ts)} — se restaura solo al abrir la página. <a href="#" class="clear-link" data-clear="${key}">Borrar</a></div>`;
+  }
+  const m = SHARED_META[key];
+  if(m){
+    return `<div class="hint persist-note">☁ Publicado para los supervisores el ${when(m.savedAt)} — lo ven al abrir la página. <a href="#" class="clear-link" data-clear="${key}">Borrar</a></div>`;
+  }
+  return `<div class="hint persist-note">💾 Solo en este navegador — todavía no lo ven los supervisores. <a href="#" class="publish-link" data-publish="${key}">Publicar</a> · <a href="#" class="clear-link" data-clear="${key}">Borrar</a></div>`;
+}
+function rangoTexto(fechas){
+  let min = Infinity, max = -Infinity;
+  fechas.forEach(f => { const t = tsOf(f); if(t){ if(t < min) min = t; if(t > max) max = t; } });
+  if(min === Infinity) return '';
+  const fmt = t => new Date(t).toLocaleDateString('es-AR');
+  return min === max ? fmt(min) : 'del ' + fmt(min) + ' al ' + fmt(max);
+}
+function rangoHint(label, fechas){
+  const t = rangoTexto(fechas);
+  return t ? `<div class="hint">${label}: ${t}</div>` : '';
+}
+function showRestoredStatus(key, ts){
+  const el = document.getElementById(STEP_STATUS[key]);
+  if(!el) return;
+  if(key === 'min'){
+    renderMinPreview(MIN_SOURCE_LABEL || 'la tabla guardada'); // escribe en status-min y arma la vista previa
+  } else {
+    let html = '';
+    if(key === 'sales'){
+      html = salesStatusHtml(ALL_SALES_RAW.length, SALES_ROWS.length, 'restauradas') + rangoHint('Fechas de las ventas', ALL_SALES_RAW.map(r => r.fecha));
+    } else if(key === 'pedidos'){
+      html = `<span class="status-ok">✓ ${PEDIDOS_ROWS.length.toLocaleString('es-AR')} pedidos restaurados</span>` + rangoHint('Fechas de los pedidos', PEDIDOS_ROWS.map(p => p.fecha));
+    } else if(key === 'visita'){
+      html = `<span class="status-ok">✓ ${VISITA_MAP.size.toLocaleString('es-AR')} clientes restaurados</span>`;
+    } else if(key === 'mensual'){
+      const clientes = new Set(MONTHLY_SALES_ROWS.map(r => r.codCliente)).size;
+      html = `<span class="status-ok">✓ ${MONTHLY_SALES_ROWS.length.toLocaleString('es-AR')} renglones restaurados · ${clientes.toLocaleString('es-AR')} clientes distintos${MONTHLY_PERIODO ? ' · período ' + escapeHtml(MONTHLY_PERIODO) : ''}</span>`;
+    } else if(key === 'activos'){
+      html = `<span class="status-ok">✓ ${CLIENTES_ACTIVOS.size.toLocaleString('es-AR')} clientes restaurados</span>`;
+    }
+    el.innerHTML = html;
+  }
+  el.insertAdjacentHTML('beforeend', persistNoteHtml(key, ts));
+}
+
+async function saveStep(key){
+  const el = document.getElementById(STEP_STATUS[key]);
+  const okLocal = await persistSave(key, stepPayload(key));
+  const publica = sharedActive() && SHARED_ROLE === 'admin';
+  let pub = null;
+  if(publica){
+    if(el){
+      el.querySelectorAll('.persist-note').forEach(n => n.remove());
+      el.insertAdjacentHTML('beforeend', '<div class="hint persist-note">☁ Publicando para los supervisores…</div>');
+    }
+    pub = await publishStep(key);
+  }
+  if(el){
+    el.querySelectorAll('.persist-note').forEach(n => n.remove());
+    let html;
+    if(publica){
+      html = (pub && pub.ok)
+        ? persistNoteHtml(key, Date.now())
+        : `<div class="hint persist-note">⚠ No se pudo publicar para los supervisores (${escapeHtml((pub && pub.error) || 'error')}). ${okLocal ? 'Quedó guardado solo en este navegador. ' : ''}<a href="#" class="publish-link" data-publish="${key}">Reintentar</a></div>`;
+    } else if(okLocal){
+      html = persistNoteHtml(key, Date.now());
+    } else {
+      html = '<div class="hint persist-note">⚠ No se pudo guardar en este navegador (¿ventana privada o sin espacio?). Los datos se mantienen solo mientras la página esté abierta.</div>';
+    }
+    el.insertAdjacentHTML('beforeend', html);
+  }
+  if(sharedActive()) updateAdminBar();
+}
+
+function refreshAllViews(){
+  tryRunCross();
+  renderDuplicados();
+  renderExtraordinarias();
+  populateFueraRutaVendedorFilter();
+  populateFueraRutaFechaFilter();
+  renderFueraDeRuta();
+  populateCompradoresFiltros();
+  renderCompradoresMes();
+}
+
+async function restoreAll(){
+  const keys = Object.keys(STEP_STATUS);
+  const recs = {};
+  await Promise.all(keys.map(async k => { recs[k] = await persistLoad(k); }));
+  const presentes = keys.filter(k => recs[k]);
+  if(!presentes.length) return 0;
+  presentes.forEach(k => stepRestore(k, recs[k].value));
+  UNMAPPED_MIN = MIN_TABLE.filter(r => !CROSSWALK_BY_MINKEY.has(crosswalkKey(r.marca, r.pack)));
+  rebuildSalesRows();
+  refreshAllViews();
+  presentes.forEach(k => showRestoredStatus(k, recs[k].savedAt));
+  return presentes.length;
+}
+
+/* ============================================================
+   MODO COMPARTIDO (Google Drive vía Apps Script)
+   ============================================================
+   El administrador carga los archivos y se PUBLICAN en una carpeta de su Drive; los supervisores
+   abren la página y los ven, sin cargar nada. Se activa pegando la URL /exec de Apps Script abajo
+   (ver apps-script-compartido.gs). Con SHARED_API_URL vacío, la página funciona en modo local.
+   Sin claves ni contraseñas: el link ES el control de acceso.
+     ...#admin  → administrador: ve los pasos de carga y publica
+     (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzqy93THv0K16s835HnXZxVow0GvxttzeGe6KJmBpacz2RD-flN1evUKQoTXNEOtUVkwQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
+let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
+let SHARED_POLL = null;
+let SHARED_CHUNK = 400000; // caracteres por parte
+const SHARED_LABEL = { min:'PTR Mínimo', sales:'Base de ventas', pedidos:'Pedidos', visita:'Días de entrega (BEES ONE)', mensual:'Acumulado del mes', activos:'Clientes activos' };
+
+function sharedActive(){ return !!SHARED_API_URL; }
+function setBanner(t){ const b = document.getElementById('persist-banner'); if(b) b.textContent = t; }
+
+function isAdminHash(){
+  const raw = (typeof location !== 'undefined' && location.hash) ? location.hash.replace(/^#/, '').toLowerCase() : '';
+  return raw === 'admin';
+}
+
+async function sharedApi(payload, tries){
+  tries = tries || 2;
+  let lastErr;
+  for(let i = 0; i < tries; i++){
+    try{
+      const res = await fetch(SHARED_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // "solicitud simple": evita el preflight de CORS con Apps Script
+        body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    } catch(e){
+      lastErr = e;
+      if(i < tries - 1) await new Promise(r => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+// Date y Map no viajan en JSON: se codifican con una marca y se reconstruyen al leer
+function sharedReplacer(k, v){
+  const o = this[k];
+  if(o instanceof Date) return { $d: o.getTime() };
+  if(o instanceof Map) return { $m: Array.from(o.entries()) };
+  return v;
+}
+function sharedReviver(k, v){
+  if(v && typeof v === 'object' && !Array.isArray(v)){
+    const ks = Object.keys(v);
+    if(ks.length === 1 && ks[0] === '$d') return new Date(v.$d);
+    if(ks.length === 1 && ks[0] === '$m') return new Map(v.$m);
+  }
+  return v;
+}
+function bytesToBase64(bytes){
+  let s = ''; const CH = 0x8000;
+  for(let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  return btoa(s);
+}
+function base64ToBytes(b64){
+  const s = atob(b64); const out = new Uint8Array(s.length);
+  for(let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+async function encodePayload(obj){
+  const json = JSON.stringify(obj, sharedReplacer);
+  let bytes = new TextEncoder().encode(json), enc = 'b64';
+  if(typeof CompressionStream !== 'undefined'){
+    try{
+      const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      enc = 'gzip-b64';
+    } catch(e){ /* sin compresión: se manda igual, pesa más */ }
+  }
+  return { b64: bytesToBase64(bytes), enc, jsonChars: json.length };
+}
+async function decodePayload(b64, enc){
+  let stream = new Blob([base64ToBytes(b64)]).stream();
+  if(enc === 'gzip-b64'){
+    if(typeof DecompressionStream === 'undefined') throw new Error('este navegador no puede descomprimir los datos: actualizalo');
+    stream = stream.pipeThrough(new DecompressionStream('gzip'));
+  }
+  return JSON.parse(await new Response(stream).text(), sharedReviver);
+}
+
+// corre `task(i)` para i = 0..n-1 con hasta 4 en paralelo; si una falla, corta y propaga el error
+async function runPool(n, task){
+  let next = 0, failed = null;
+  const worker = async () => {
+    while(next < n && !failed){
+      const i = next++;
+      try{ await task(i); } catch(e){ failed = failed || e; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, n) }, worker));
+  if(failed) throw failed;
+}
+
+async function publishStep(key){
+  try{
+    const { b64, enc } = await encodePayload(stepPayload(key));
+    const uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const parts = Math.max(1, Math.ceil(b64.length / SHARED_CHUNK));
+    await runPool(parts, async i => {
+      const r = await sharedApi({ action:'putPart', key, uploadId, part:i, data: b64.slice(i * SHARED_CHUNK, (i + 1) * SHARED_CHUNK) });
+      if(!r.ok) throw new Error(r.error || 'error al subir una parte');
+    });
+    const savedAt = Date.now();
+    const c = await sharedApi({ action:'commit', key, uploadId, parts, savedAt, enc, bytes: b64.length });
+    if(!c.ok) return { ok:false, error: c.error || 'error al confirmar' };
+    SHARED_META[key] = { key, uploadId, parts, savedAt, enc, bytes: b64.length };
+    return { ok:true, savedAt, parts, bytes: b64.length };
+  } catch(e){
+    return { ok:false, error: String((e && e.message) || e) };
+  }
+}
+
+async function loadShared(){
+  const lst = await sharedApi({ action:'list' });
+  if(!lst.ok) throw new Error(lst.error || 'no se pudo leer la lista');
+  SHARED_META = {};
+  lst.items.forEach(it => { SHARED_META[it.key] = it; });
+  const keys = Object.keys(STEP_STATUS);
+  const presentes = keys.filter(k => SHARED_META[k]);
+  keys.filter(k => !SHARED_META[k]).forEach(k => stepRestore(k, null)); // lo que ya no está publicado se vacía de memoria
+  let hechos = 0;
+  for(const k of presentes){
+    setBanner(`☁ Cargando datos compartidos… (${hechos + 1}/${presentes.length}) ${SHARED_LABEL[k]}`);
+    const m = SHARED_META[k];
+    const chunks = new Array(m.parts);
+    await runPool(m.parts, async i => {
+      const r = await sharedApi({ action:'getPart', key:k, uploadId:m.uploadId, part:i });
+      if(!r.ok) throw new Error(r.error || 'no se pudo leer una parte');
+      chunks[i] = r.data;
+    });
+    stepRestore(k, await decodePayload(chunks.join(''), m.enc));
+    hechos++;
+  }
+  return presentes;
+}
+
+function stepHasData(k){
+  switch(k){
+    case 'min': return MIN_TABLE.length > 0;
+    case 'sales': return ALL_SALES_RAW.length > 0;
+    case 'pedidos': return PEDIDOS_ROWS.length > 0;
+    case 'visita': return VISITA_MAP.size > 0;
+    case 'mensual': return MONTHLY_SALES_ROWS.length > 0;
+    case 'activos': return CLIENTES_ACTIVOS.size > 0;
+  }
+  return false;
+}
+
+function applyRoleUI(){
+  const cl = document.body && document.body.classList;
+  if(!cl) return;
+  ['role-admin', 'role-viewer'].forEach(c => cl.remove(c));
+  if(['admin', 'viewer'].indexOf(SHARED_ROLE) !== -1) cl.add('role-' + SHARED_ROLE);
+}
+
+function updateAdminBar(){
+  const msg = document.getElementById('admin-bar-msg'), btn = document.getElementById('btn-publish-all');
+  if(!msg || !btn) return;
+  const pend = Object.keys(STEP_STATUS).filter(k => stepHasData(k) && !SHARED_META[k]);
+  btn.style.display = pend.length ? '' : 'none';
+  msg.textContent = pend.length
+    ? `☁ Modo administrador · ${pend.length} archivo(s) todavía no publicado(s): ${pend.map(k => SHARED_LABEL[k]).join(', ')}.`
+    : '☁ Modo administrador · lo que cargues se publica solo para los supervisores.';
+}
+
+async function publishAll(){
+  const msg = document.getElementById('admin-bar-msg');
+  const pend = Object.keys(STEP_STATUS).filter(k => stepHasData(k) && !SHARED_META[k]);
+  for(let i = 0; i < pend.length; i++){
+    if(msg) msg.textContent = `☁ Publicando ${SHARED_LABEL[pend[i]]} (${i + 1}/${pend.length})…`;
+    await saveStep(pend[i]);
+  }
+  updateAdminBar();
+}
+
+function summaryDetail(key){
+  const n = x => x.toLocaleString('es-AR');
+  switch(key){
+    case 'min': return `${MIN_TABLE.length} filas`;
+    case 'sales': { const r = rangoTexto(ALL_SALES_RAW.map(x => x.fecha)); return `${n(ALL_SALES_RAW.length)} renglones` + (r ? ' · ' + r : ''); }
+    case 'pedidos': { const r = rangoTexto(PEDIDOS_ROWS.map(x => x.fecha)); return `${n(PEDIDOS_ROWS.length)} pedidos` + (r ? ' · ' + r : ''); }
+    case 'visita': return `${n(VISITA_MAP.size)} clientes`;
+    case 'mensual': return `${n(MONTHLY_SALES_ROWS.length)} renglones` + (MONTHLY_PERIODO ? ' · período ' + escapeHtml(MONTHLY_PERIODO) : '');
+    case 'activos': return `${n(CLIENTES_ACTIVOS.size)} clientes`;
+  }
+  return '';
+}
+function renderSharedSummary(){
+  const el = document.getElementById('shared-summary-body');
+  if(!el) return;
+  const when = t => new Date(t).toLocaleString('es-AR');
+  let html = '<table><thead><tr><th>Dato</th><th>Contenido</th><th>Publicado</th></tr></thead><tbody>';
+  Object.keys(STEP_STATUS).forEach(k => {
+    const m = SHARED_META[k];
+    html += `<tr><td class="strong">${SHARED_LABEL[k]}</td><td>${m ? summaryDetail(k) : '<span class="badge">sin publicar</span>'}</td><td class="mono">${m ? when(m.savedAt) : '—'}</td></tr>`;
+  });
+  el.innerHTML = html + '</tbody></table>';
+}
+
+async function adoptLocalForMissing(loaded){
+  // el administrador puede tener datos guardados solo en su navegador (de antes de activar el modo compartido)
+  const adopted = [];
+  for(const k of Object.keys(STEP_STATUS)){
+    if(loaded.indexOf(k) !== -1) continue;
+    const rec = await persistLoad(k);
+    if(rec){ stepRestore(k, rec.value); adopted.push({ k, savedAt: rec.savedAt }); }
+  }
+  return adopted;
+}
+
+async function sharedReload(){
+  const loaded = await loadShared();
+  const adopted = SHARED_ROLE === 'admin' ? await adoptLocalForMissing(loaded) : [];
+  UNMAPPED_MIN = MIN_TABLE.filter(r => !CROSSWALK_BY_MINKEY.has(crosswalkKey(r.marca, r.pack)));
+  rebuildSalesRows();
+  refreshAllViews();
+  renderSharedSummary();
+  const ultima = Object.keys(SHARED_META).reduce((a, k) => Math.max(a, SHARED_META[k].savedAt || 0), 0);
+  if(SHARED_ROLE === 'admin'){
+    loaded.forEach(k => showRestoredStatus(k, SHARED_META[k].savedAt));
+    adopted.forEach(a => showRestoredStatus(a.k, a.savedAt));
+    updateAdminBar();
+    setBanner(loaded.length || adopted.length
+      ? `☁ Datos compartidos cargados (${loaded.length} publicado(s)${adopted.length ? ', ' + adopted.length + ' solo en este navegador' : ''}). Lo que cargues o reemplaces se publica solo para los supervisores.`
+      : '☁ Todavía no publicaste nada: cargá los archivos y se publican solos para los supervisores.');
+  } else {
+    setBanner(ultima
+      ? `☁ Datos publicados por el administrador · última actualización: ${new Date(ultima).toLocaleString('es-AR')}`
+      : 'Todavía no hay datos publicados. Avisale al administrador.');
+  }
+}
+
+function startSharedPolling(){
+  if(SHARED_POLL) return;
+  SHARED_POLL = setInterval(async () => {
+    if(typeof document !== 'undefined' && document.hidden) return;
+    try{
+      const lst = await sharedApi({ action:'list' }, 1);
+      if(!lst.ok) return;
+      const cambio = lst.items.length !== Object.keys(SHARED_META).length
+        || lst.items.some(it => !SHARED_META[it.key] || SHARED_META[it.key].uploadId !== it.uploadId);
+      if(cambio) await sharedReload();
+    } catch(e){ /* sin conexión: se reintenta en el próximo ciclo */ }
+  }, 300000);
+}
+
+async function startLocal(){
+  try{
+    const n = await restoreAll();
+    if(typeof indexedDB === 'undefined'){
+      setBanner('⚠ Este navegador no permite guardar datos: vas a tener que volver a cargar los archivos cada vez.');
+    } else if(n){
+      setBanner(`💾 Se restauraron ${n} archivo(s) guardados la última vez en este navegador. Podés reemplazar cualquiera subiendo uno nuevo, o borrarlo con el link "Borrar" de cada paso.`);
+    }
+  } catch(err){ console.warn('No se pudo restaurar lo guardado', err); }
+}
+
+async function bootstrap(){
+  if(!sharedActive()){ await startLocal(); return; }
+  const admin = isAdminHash();
+  if(typeof history !== 'undefined'){ try{ history.replaceState(null, '', location.pathname + location.search); } catch(e){} } // no deja "#admin" a la vista en la barra
+  setBanner('☁ Conectando con el servidor compartido…');
+  let netErr = null;
+  try{ await sharedApi({ action:'whoami' }); } catch(e){ netErr = e; }
+  SHARED_ROLE = admin ? 'admin' : 'viewer';
+  applyRoleUI();
+  if(netErr){
+    const n = SHARED_ROLE === 'admin' ? await restoreAll() : 0;
+    updateAdminBar();
+    setBanner(SHARED_ROLE === 'admin'
+      ? `⚠ No hay conexión con el servidor compartido. ${n ? 'Se cargó lo guardado en este navegador; ' : ''}lo que cargues queda solo acá hasta que vuelva la conexión (después tocá "Publicar").`
+      : '⚠ No se pudo conectar con el servidor compartido. Probá de nuevo en un rato.');
+    return;
+  }
+  try{ await sharedReload(); }
+  catch(e){ setBanner('⚠ No se pudieron cargar los datos compartidos: ' + ((e && e.message) || e)); }
+  if(SHARED_ROLE === 'viewer') startSharedPolling();
 }
 
 /* ============================================================
@@ -1678,13 +2317,49 @@ document.getElementById('fuera-ruta-vendedor').addEventListener('change', render
 document.getElementById('fuera-ruta-fecha').addEventListener('change', renderFueraDeRuta);
 document.getElementById('btn-export-fuera-ruta').addEventListener('click', exportFueraDeRutaExcel);
 
-document.getElementById('compradores-fecha').addEventListener('change', renderCompradoresMes);
-document.getElementById('compradores-vendedor').addEventListener('change', renderCompradoresMes);
-document.getElementById('btn-export-compradores').addEventListener('click', exportCompradoresMesExcel);
+COMPRADORES_CFGS.forEach(cfg => {
+  document.getElementById(cfg.fechaId).addEventListener('change', () => renderCompradoresTab(cfg));
+  document.getElementById(cfg.vendId).addEventListener('change', () => renderCompradoresTab(cfg));
+  document.getElementById(cfg.exportId).addEventListener('click', () => exportCompradoresExcel(cfg));
+});
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
 });
+
+// links de cada paso guardado: "Publicar" / "Borrar"
+document.addEventListener('click', async (e) => {
+  const t = e.target;
+  if(!t || !t.closest) return;
+  const pub = t.closest('.publish-link');
+  if(pub){
+    e.preventDefault();
+    await saveStep(pub.dataset.publish);
+    return;
+  }
+  const a = t.closest('.clear-link');
+  if(!a) return;
+  e.preventDefault();
+  const key = a.dataset.clear;
+  await persistDelete(key);
+  if(sharedActive() && SHARED_ROLE === 'admin'){
+    try{ await sharedApi({ action:'del', key }); } catch(err){ console.warn('No se pudo borrar lo publicado', err); }
+    delete SHARED_META[key];
+  }
+  stepClear(key);
+  refreshAllViews();
+  if(sharedActive()) updateAdminBar();
+});
+
+const btnRefresh = document.getElementById('btn-shared-refresh');
+if(btnRefresh) btnRefresh.addEventListener('click', async () => {
+  try{ await sharedReload(); } catch(e){ setBanner('⚠ No se pudo actualizar: ' + ((e && e.message) || e)); }
+});
+const btnPubAll = document.getElementById('btn-publish-all');
+if(btnPubAll) btnPubAll.addEventListener('click', publishAll);
+
+// al abrir la página: modo compartido (si hay servidor configurado) o modo local
+bootstrap();
 
 </script>
 </body>
