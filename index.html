@@ -1976,7 +1976,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbwTXg-bdT0oJAm1V49ne2XOddWyiKxs1y2tNTNyN6U4FGHa-BIsO_Q-kra9--OG4cYP5Q/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzB6AwhKdaRLPM1qb8Oncr1O_9565q7HBlud8HGSHoHAwskHeNMy15K0AIJpYXo7_QM4g/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -1991,20 +1991,40 @@ function isAdminHash(){
   return raw === 'admin';
 }
 
+let __jsonpSeq = 0;
+function jsonpRequest(url, timeoutMs){
+  // Carga la respuesta con una etiqueta <script>, no con fetch(): así se
+  // esquiva por completo el control de CORS del navegador (que es lo que
+  // corta a fetch() con "Failed to fetch" en la redirección que hace
+  // Apps Script). Es la técnica que la propia documentación de Apps
+  // Script recomienda para esto.
+  return new Promise((resolve, reject) => {
+    const cbName = '__ccd_cb_' + Date.now().toString(36) + '_' + (__jsonpSeq++);
+    const script = document.createElement('script');
+    let done = false;
+    const timer = setTimeout(() => finish(reject, new Error('Tiempo de espera agotado')), timeoutMs || 30000);
+    function finish(fn, val){
+      if(done) return;
+      done = true;
+      clearTimeout(timer);
+      try{ delete window[cbName]; }catch(e){}
+      if(script.parentNode) script.parentNode.removeChild(script);
+      fn(val);
+    }
+    window[cbName] = data => finish(resolve, data);
+    script.onerror = () => finish(reject, new Error('No se pudo contactar al servidor compartido (revisá la URL o la conexión)'));
+    script.src = url + (url.indexOf('?') === -1 ? '?' : '&') + 'callback=' + cbName;
+    document.head.appendChild(script);
+  });
+}
+
 async function sharedApi(payload, tries){
-  // Se usa GET (con el pedido como parámetro de la URL) y no POST: un POST al
-  // /exec de Apps Script llega con una redirección (302) que no trae los
-  // encabezados de CORS necesarios para leer la respuesta desde otro sitio, y
-  // el navegador lo corta con "Failed to fetch" antes de que el código del
-  // lado del servidor llegue a correr. GET no tiene ese problema.
   tries = tries || 2;
   let lastErr;
   const url = SHARED_API_URL + '?req=' + encodeURIComponent(JSON.stringify(payload));
   for(let i = 0; i < tries; i++){
     try{
-      const res = await fetch(url);
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.json();
+      return await jsonpRequest(url);
     } catch(e){
       lastErr = e;
       if(i < tries - 1) await new Promise(r => setTimeout(r, 400 * (i + 1)));
