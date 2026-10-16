@@ -81,6 +81,12 @@
   td.mono,th.mono{font-family:var(--mono);}
   .scroll-x{overflow-x:auto;max-height:560px;overflow-y:auto;}
   .scroll-x th{position:sticky;top:0;background:var(--surface);z-index:5;box-shadow:0 1px 0 var(--border);}
+  /* Perforaciones: Cód. Cliente y Razón Social quedan fijas al desplazarse hacia la derecha */
+  table.tbl-sticky th:nth-child(1), table.tbl-sticky td:nth-child(1){position:sticky;left:0;min-width:92px;max-width:92px;}
+  table.tbl-sticky th:nth-child(2), table.tbl-sticky td:nth-child(2){position:sticky;left:92px;min-width:200px;max-width:200px;box-shadow:2px 0 0 var(--border);}
+  table.tbl-sticky td:nth-child(-n+2){background-color:var(--surface);z-index:3;}
+  table.tbl-sticky tr.perfora td:nth-child(-n+2){background-image:linear-gradient(rgba(193,91,91,.06),rgba(193,91,91,.06));}
+  .scroll-x table.tbl-sticky th:nth-child(-n+2){z-index:8;}
   .diff-neg{color:var(--red);font-weight:700;}
   .diff-pos{color:var(--green);}
   .tag-perfora{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700;background:var(--red-soft);color:var(--red);}
@@ -106,6 +112,9 @@
   table.tbl-focos td{padding:8px 6px;}
   table.tbl-focos th:nth-child(n+4), table.tbl-focos td:nth-child(n+4){text-align:center;}
   table.tbl-focos td:nth-child(3), table.tbl-focos th:nth-child(3){min-width:150px;}
+  .noc-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;font-size:12.5px;color:var(--text-dim);cursor:pointer;user-select:none;background:var(--surface-2);}
+  .noc-chip input{margin:0;}
+  .noc-chip.on{border-color:var(--copper);color:var(--text);background:var(--copper-soft);}
   .clear-link{color:var(--copper);cursor:pointer;margin-left:6px;text-decoration:underline;}
   .persist-banner{font-size:12.5px;color:var(--text-dim);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 13px;margin-bottom:14px;}
 
@@ -231,8 +240,9 @@ Andes	Core	Lata	24	39400
     <button class="tab-btn" data-tab="duplicados" type="button">Pedidos Duplicados</button>
     <button class="tab-btn" data-tab="extraordinarias" type="button">Ventas Extraordinarias</button>
     <button class="tab-btn" data-tab="fuera-ruta" type="button">Fuera de Ruta</button>
-    <button class="tab-btn" data-tab="compradores-mes" type="button">Compradores del Mes</button>
-    <button class="tab-btn" data-tab="compradores-ung" type="button">Compradores del Mes UNG</button>
+    <button class="tab-btn" data-tab="compradores-mes" type="button">Compradores de Cerveza</button>
+    <button class="tab-btn" data-tab="compradores-ung" type="button">Compradores de UNG</button>
+    <button class="tab-btn" data-tab="enviar-focos" type="button">Enviar no compradores foco</button>
   </div>
 
   <!-- ============== TAB: PERFORACIONES ============== -->
@@ -375,7 +385,7 @@ Andes	Core	Lata	24	39400
     </div>
   </div>
 
-  <!-- ============== TAB: COMPRADORES DEL MES ============== -->
+  <!-- ============== TAB: COMPRADORES DE CERVEZA ============== -->
   <div class="tab-panel" id="tab-compradores-mes" style="display:none;">
     <div class="card">
       <div class="filters">
@@ -402,10 +412,9 @@ Andes	Core	Lata	24	39400
       <div class="scroll-x" id="table-compradores-sin-pedido"></div>
     </div>
 
-    <div class="card" id="wpp-mes"></div>
   </div>
 
-  <!-- ============== TAB: COMPRADORES DEL MES UNG ============== -->
+  <!-- ============== TAB: COMPRADORES DE UNG ============== -->
   <div class="tab-panel" id="tab-compradores-ung" style="display:none;">
     <div class="card">
       <div class="filters">
@@ -419,7 +428,7 @@ Andes	Core	Lata	24	39400
         </div>
         <button class="ghost" id="btn-export-compradores-ung" type="button">⬇ Exportar a Excel</button>
       </div>
-      <div class="hint">Igual que "Compradores del Mes", pero con los focos de UNG: CCC UNG, Pepsi Black, Gatorade, H2OH, Red Bull, Aguas y Jagermeister. Un SÍ significa que el cliente ya compró ese foco en el mes (acumulado del Paso 5 + base de ventas del Paso 2). La columna "Faltan" cuenta en cuántos de los 7 todavía no compró, y los que más faltan salen primero.</div>
+      <div class="hint">Igual que "Compradores de Cerveza", pero con los focos de UNG: CCC UNG, Pepsi Black, Gatorade, H2OH, Red Bull, Aguas y Jagermeister. Un SÍ significa que el cliente ya compró ese foco en el mes (acumulado del Paso 5 + base de ventas del Paso 2). La columna "Faltan" cuenta en cuántos de los 7 todavía no compró, y los que más faltan salen primero.</div>
     </div>
 
     <div class="card">
@@ -432,7 +441,22 @@ Andes	Core	Lata	24	39400
       <div class="scroll-x" id="table-compradores-ung-sin-pedido"></div>
     </div>
 
-    <div class="card" id="wpp-ung"></div>
+  </div>
+
+  <!-- ============== TAB: ENVIAR NO COMPRADORES FOCO ============== -->
+  <div class="tab-panel" id="tab-enviar-focos" style="display:none;">
+    <div class="card">
+      <div class="filters">
+        <div class="field">
+          <label>Fecha de pedido ("mañana")</label>
+          <select id="noc-fecha"><option value="">Elegí una fecha…</option></select>
+        </div>
+      </div>
+      <div class="card-title" style="margin-top:4px;">Focos que van en el mensaje</div>
+      <div id="noc-focos"></div>
+      <div class="hint">Marcá los focos (de cerveza y de UNG) que querés trabajar con los vendedores. A cada vendedor le llegan solo sus clientes que <b>no compraron</b> alguno de esos focos en el mes: los que tienen pedido para la fecha y los que tienen entrega y no pidieron. La elección queda guardada en este navegador.</div>
+    </div>
+    <div class="card" id="wpp-noc"></div>
   </div>
 
 </div>
@@ -959,22 +983,22 @@ function renderDetailTable(rows){
   });
 
   const cols = [
+    {key:'codCliente', label:'Cód. Cliente', mono:true},
+    {key:'cliente', label:'Razón Social'},
     {key:'vendedor', label:'Vendedor'},
-    {key:'cliente', label:'Cliente'},
     {key:'canal', label:'Canal'},
     {key:'marca', label:'Marca'},
     {key:'pack', label:'Pack'},
     {key:'fecha', label:'Fecha'},
     {key:'ptrMin', label:'PTR Mín', mono:true},
     {key:'precioFinal', label:'Precio Final/bulto', mono:true},
-    {key:'prNeto', label:'Precio Neto (ref.)', mono:true},
     {key:'descPct', label:'Descuento', mono:true},
     {key:'cant', label:'Bultos', mono:true},
     {key:'diff', label:'Diferencia/bulto', mono:true},
     {key:'impacto', label:'Impacto $', mono:true},
   ];
 
-  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c.mono?'mono':''}" data-sort="${c.key}">${c.label}<span class="arrow">${sortState.col===c.key ? (sortState.dir>0?'▲':'▼') : ''}</span></th>`).join('') + '<th>Estado</th></tr></thead><tbody>';
+  let html = '<table class="tbl-sticky"><thead><tr>' + cols.map(c => `<th class="${c.mono?'mono':''}" data-sort="${c.key}">${c.label}<span class="arrow">${sortState.col===c.key ? (sortState.dir>0?'▲':'▼') : ''}</span></th>`).join('') + '<th>Estado</th></tr></thead><tbody>';
 
   const top = sorted.slice(0, 400);
   top.forEach(r => {
@@ -982,15 +1006,15 @@ function renderDetailTable(rows){
     const diffCls = r.diff < 0 ? 'diff-neg' : 'diff-pos';
     const impacto = r.diff * r.cant;
     html += `<tr class="${r.diff<0?'perfora':''}">
-      <td>${escapeHtml(r.vendedor)}</td>
+      <td class="mono">${r.codCliente === undefined || r.codCliente === null || isNaN(r.codCliente) ? '' : r.codCliente}</td>
       <td class="strong">${escapeHtml(r.cliente)}</td>
+      <td>${escapeHtml(r.vendedor)}</td>
       <td><span class="badge">${escapeHtml(CANAL_LABELS[r.canal]||r.canal)}</span></td>
       <td>${escapeHtml(r.marca)}</td>
       <td>${escapeHtml(r.pack)}</td>
       <td class="mono">${fecha}</td>
       <td class="mono">${fmtMoney(r.ptrMin)}</td>
       <td class="mono strong">${fmtMoney(r.precioFinal)}</td>
-      <td class="mono" style="color:var(--text-faint);">${fmtMoney(r.prNeto)}</td>
       <td class="mono">${fmtDesc(r.descPct)}</td>
       <td class="mono">${r.cant.toLocaleString('es-AR', {maximumFractionDigits:2})}</td>
       <td class="mono ${diffCls}">${r.diff>=0?'+':''}${fmtMoney(r.diff)}</td>
@@ -1032,11 +1056,11 @@ function exportPerforacionesExcel(){
     if(typeof av === 'string') return av.localeCompare(bv,'es') * sortState.dir;
     return ((av||0) - (bv||0)) * sortState.dir;
   });
-  const header = ['Vendedor','Cód. Cliente','Cliente','Canal','Marca','Pack','Fecha','PTR Mínimo','Precio Final/bulto','Precio Neto (ref.)','Descuento %','Bultos','Diferencia/bulto','Impacto $','Estado'];
+  const header = ['Cód. Cliente','Razón Social','Vendedor','Canal','Marca','Pack','Fecha','PTR Mínimo','Precio Final/bulto','Descuento %','Bultos','Diferencia/bulto','Impacto $','Estado'];
   const aoa = [header, ...rows.map(r => [
-    r.vendedor, r.codCliente, r.cliente, CANAL_LABELS[r.canal]||r.canal, r.marca, r.pack,
+    r.codCliente, r.cliente, r.vendedor, CANAL_LABELS[r.canal]||r.canal, r.marca, r.pack,
     r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : r.fecha,
-    r.ptrMin, r.precioFinal, r.prNeto, (r.descPct === null || r.descPct === undefined) ? '' : Math.round(r.descPct * 100) / 100, r.cant, r.diff, r.diff*r.cant, r.diff<0?'PERFORA':'OK'
+    r.ptrMin, r.precioFinal, (r.descPct === null || r.descPct === undefined) ? '' : Math.round(r.descPct * 100) / 100, r.cant, r.diff, r.diff*r.cant, r.diff<0?'PERFORA':'OK'
   ])];
   exportToExcel(`perforaciones_${todayStamp()}.xlsx`, 'Perforaciones', aoa);
 }
@@ -1486,7 +1510,7 @@ const MARCAS_MICHELOB = [88, 356, 531];                    // Código marca
 const COMPRADORES_MES_CFG = {
   id: 'mes', file: 'compradores_mes',
   fechaId: 'compradores-fecha', vendId: 'compradores-vendedor',
-  mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores', wppId: 'wpp-mes',
+  mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores',
   focos: [
     { key:'cza', short:'CZA',        label:'CCC CZA',              test: r => r.unCod === 1 },                                  // Unidad de Negocio (AI) = 1
     { key:'ung', short:'UNG',        label:'CCC UNG',              test: r => r.unCod === 3 },                                  // Unidad de Negocio (AI) = 3
@@ -1504,7 +1528,7 @@ const COMPRADORES_MES_CFG = {
 const COMPRADORES_UNG_CFG = {
   id: 'ung', file: 'compradores_mes_ung',
   fechaId: 'compradores-ung-fecha', vendId: 'compradores-ung-vendedor',
-  mainId: 'table-compradores-ung', sinId: 'table-compradores-ung-sin-pedido', exportId: 'btn-export-compradores-ung', wppId: 'wpp-ung',
+  mainId: 'table-compradores-ung', sinId: 'table-compradores-ung-sin-pedido', exportId: 'btn-export-compradores-ung',
   focos: [
     { key:'cccUng',     label:'CCC UNG',         test: r => r.unCod === 3 },       // Unidad de Negocio (AI) = 3
     { key:'pepsiBlack', label:'CCC Pepsi Black', test: r => r.esBlack === true },  // columna S (artículo) contiene "BLACK"
@@ -1522,6 +1546,13 @@ const COMPRADORES_UNG_CFG = {
 const COMPRADORES_CFGS = [COMPRADORES_MES_CFG, COMPRADORES_UNG_CFG];
 
 function populateCompradoresFiltros(){
+  (function(){
+    const sel = document.getElementById('noc-fecha'); if(!sel) return;
+    const actual = sel.value;
+    const fechas = Array.from(new Set(PEDIDOS_ROWS.map(p => dateKeyOf(p.fecha)).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="">Elegí una fecha…</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')} (${DIA_LABEL[weekdayKeyFromDate(f)]})</option>`).join('');
+    if(fechas.includes(actual)) sel.value = actual;
+  })();
   COMPRADORES_CFGS.forEach(cfg => {
     const selFecha = document.getElementById(cfg.fechaId);
     const actualFecha = selFecha.value;
@@ -1645,7 +1676,7 @@ function buildClientDirectory(){
 
 function computeCompradoresMes(fecha, vendedorFiltro, cfg){
   cfg = cfg || COMPRADORES_MES_CFG;
-  const clientFlags = computeClientFlags(cfg);
+  const clientFlags = cfg.flagsCache || computeClientFlags(cfg);
   const vacios = {};
   cfg.focos.forEach(fo => { vacios[fo.key] = false; });
   const pedidosDia = PEDIDOS_ROWS.filter(p => dateKeyOf(p.fecha) === fecha && (!vendedorFiltro || normText(p.vendedor) === normText(vendedorFiltro)));
@@ -1658,14 +1689,16 @@ function computeCompradoresMes(fecha, vendedorFiltro, cfg){
   });
   const conPedido = Array.from(porCliente.values()).map(c => {
     const flags = clientFlags.get(c.codCliente) || vacios;
+    const faltan = cfg.focos.filter(fo => !flags[fo.key]).length;
+    const esVip = cfg.vipSet ? cfg.vipSet.has(c.codCliente) : cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente));
+    const vipFalta = cfg.vipSet ? (esVip && faltan > 0) : cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente) && !flags[fo.key]);
     return {
       codCliente: c.codCliente, cliente: c.cliente,
       vendedor: Array.from(c.vendedores).join(', '),
       ...flags,
-      faltan: cfg.focos.filter(fo => !flags[fo.key]).length,
+      faltan,
       destacar: cfg.highlight ? !!cfg.highlight(flags) : false,
-      esVip: cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente)),
-      vipFalta: cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente) && !flags[fo.key])
+      esVip, vipFalta
     };
   });
   conPedido.sort((a,b) => {
@@ -1730,7 +1763,6 @@ function renderSinPedidoTable(elSin, fecha, vendedorFiltro, sinPedido, sinVended
 }
 
 function renderCompradoresTab(cfg){
-  renderWppPanel(cfg);
   const elMain = document.getElementById(cfg.mainId);
   const elSin = document.getElementById(cfg.sinId);
   const fecha = document.getElementById(cfg.fechaId).value;
@@ -1818,53 +1850,107 @@ function wppVendedores(fecha, cfg){
   computeCompradoresMes(fecha, '', cfg).sinPedido.forEach(s => sumar(s.vendedor));
   return Array.from(vistos.values()).sort((a, b) => a.localeCompare(b, 'es'));
 }
+// Mensaje para un vendedor: solo sus clientes que NO compraron alguno de los focos elegidos.
 function buildWppMessage(cfg, fecha, vendedor, saludo){
   const res = computeCompradoresMes(fecha, vendedor, cfg);
-  const flags = computeClientFlags(cfg);
+  const flags = cfg.flagsCache || computeClientFlags(cfg);
   const opsDe = f => cfg.focos.filter(fo => !f[fo.key]).map(wppFocoLabel);
-  const vipDe = code => cfg.focos.some(fo => fo.vip && fo.vip.has(code));
+  const vipDe = code => cfg.vipSet ? cfg.vipSet.has(code) : cfg.focos.some(fo => fo.vip && fo.vip.has(code));
   const dia = wppFechaLabel(fecha);
 
   const conOps = res.conPedido.filter(c => c.faltan > 0);
   const completos = res.conPedido.length - conOps.length;
-  let msg = `Hola ${saludo}, te paso las oportunidades para los clientes que tienen pedido para el *${dia}*:\n`;
+  const sinOps = res.sinPedido.map(sp => ({ sp, ops: opsDe(flags.get(sp.codCliente) || {}) })).filter(x => x.ops.length)
+    .sort((x, y) => (vipDe(y.sp.codCliente) ? 1 : 0) - (vipDe(x.sp.codCliente) ? 1 : 0));
 
-  msg += `\n✅ *CON PEDIDO* (${res.conPedido.length})\n`;
-  if(!res.conPedido.length) msg += 'Ninguno cargó pedido para ese día.\n';
+  let msg = `Hola ${saludo}, te paso las oportunidades para los clientes que tienen pedido para el *${dia}*:\n`;
+  msg += `🎯 Focos: *${cfg.focos.map(wppFocoLabel).join(' | ')}*\n`;
+
+  msg += `\n✅ *CON PEDIDO* (${conOps.length})\n`;
+  if(!conOps.length) msg += 'Ninguno: todos los que pidieron ya compraron estos focos 👏\n';
   conOps.forEach(c => {
     msg += `• *${c.codCliente}* ${wppTitleCase(c.cliente)}${c.esVip ? ' (P1&P4)' : ''}: oportunidad en ${opsDe(c).join(' | ')}\n`;
   });
-  if(res.conPedido.length && !conOps.length) msg += 'Todos ya compraron todos los focos 👏\n';
-  else if(completos > 0) msg += `(+${completos} cliente${completos === 1 ? '' : 's'} sin oportunidades pendientes)\n`;
+  if(conOps.length && completos > 0) msg += `(+${completos} cliente${completos === 1 ? '' : 's'} con pedido sin oportunidades pendientes)\n`;
 
-  msg += `\n⚠️ *TIENEN ENTREGA Y NO PIDIERON* (${res.sinPedido.length})\n`;
-  if(!res.sinPedido.length) msg += 'Todos los que tienen entrega ya cargaron pedido 👍\n';
-  res.sinPedido.slice().sort((x, y) => (vipDe(y.codCliente) ? 1 : 0) - (vipDe(x.codCliente) ? 1 : 0)).forEach(sp => {
-    const f = flags.get(sp.codCliente) || {};
-    const ops = opsDe(f);
-    const txt = !ops.length ? 'ya compró todos los focos' : (ops.length === cfg.focos.length ? 'oportunidad en todo' : 'oportunidad en ' + ops.join(' | '));
+  msg += `\n⚠️ *TIENEN ENTREGA Y NO PIDIERON* (${sinOps.length})\n`;
+  if(!sinOps.length) msg += 'Ninguno 👍\n';
+  sinOps.forEach(({ sp, ops }) => {
+    const txt = ops.length === cfg.focos.length ? 'oportunidad en todo' : 'oportunidad en ' + ops.join(' | ');
     msg += `• *${sp.codCliente}* ${wppTitleCase(sp.razonSocial || '(sin razón social)')}${vipDe(sp.codCliente) ? ' (P1&P4)' : ''}: ${txt}\n`;
   });
-  return msg.trim();
+  return { text: msg.trim(), nCon: conOps.length, nSin: sinOps.length };
 }
+
+/* ---- Pestaña "Enviar no compradores foco": elección de focos ---- */
+const NOC_KEY = 'ccd_noc_focos_v1';
+function nocCatalog(){
+  // UNG se muestra una sola vez (en el grupo UNG); el resto de cerveza viene de la pestaña de cerveza
+  return {
+    cerveza: COMPRADORES_MES_CFG.focos.filter(f => f.key !== 'ung'),
+    ung: COMPRADORES_UNG_CFG.focos
+  };
+}
+function nocSeleccion(){ try{ const a = JSON.parse(localStorage.getItem(NOC_KEY) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function nocGuardar(arr){ try{ localStorage.setItem(NOC_KEY, JSON.stringify(arr)); }catch(e){} }
+function getNocCfg(){
+  const cat = nocCatalog(), sel = new Set(nocSeleccion());
+  const focos = cat.cerveza.concat(cat.ung).filter(f => sel.has(f.key));
+  const cfg = { id:'noc', fechaId:'noc-fecha', wppId:'wpp-noc', focos, highlight:null, sortByFaltan:true, vipSet: CLIENTES_P1P4 };
+  if(focos.length && (MONTHLY_SALES_ROWS.length || ALL_SALES_RAW.length)) cfg.flagsCache = computeClientFlags(cfg);
+  return cfg;
+}
+function renderNocFocos(){
+  const el = document.getElementById('noc-focos');
+  if(!el) return;
+  const cat = nocCatalog(), sel = new Set(nocSeleccion());
+  const grupo = (id, titulo, focos) => `<div style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px;">${titulo}
+        <a class="clear-link noc-all" data-g="${id}">todos</a><a class="clear-link noc-none" data-g="${id}">ninguno</a></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">${focos.map(f => `<label class="noc-chip${sel.has(f.key) ? ' on' : ''}"><input type="checkbox" value="${f.key}"${sel.has(f.key) ? ' checked' : ''}> ${escapeHtml(wppFocoLabel(f))}</label>`).join('')}</div>
+    </div>`;
+  el.innerHTML = grupo('cerveza', '🍺 Cerveza', cat.cerveza) + grupo('ung', '🥤 UNG', cat.ung);
+  const cambiar = arr => { nocGuardar(arr); renderNoc(); };
+  el.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    const now = new Set(nocSeleccion()); if(cb.checked) now.add(cb.value); else now.delete(cb.value);
+    cambiar(Array.from(now));
+  }));
+  const claves = g => cat[g].map(f => f.key);
+  el.querySelectorAll('.noc-all').forEach(a => a.addEventListener('click', () => cambiar(Array.from(new Set(nocSeleccion().concat(claves(a.dataset.g)))))));
+  el.querySelectorAll('.noc-none').forEach(a => a.addEventListener('click', () => { const q = new Set(claves(a.dataset.g)); cambiar(nocSeleccion().filter(k => !q.has(k))); }));
+}
+function renderNoc(){
+  renderNocFocos();
+  renderWppPanel(getNocCfg());
+}
+
+/* ============================================================
+   ENVÍO POR WHATSAPP (semiautomático)
+   Arma un mensaje de texto por vendedor y abre WhatsApp con el número y el texto
+   ya cargados; solo hay que apretar "enviar". Los números se guardan en la nube
+   (modo admin) y en este navegador.
+   ============================================================ */
 function renderWppPanel(cfg){
   const el = document.getElementById(cfg.wppId);
   if(!el) return;
   const fecha = document.getElementById(cfg.fechaId).value;
-  if(!fecha || !PEDIDOS_ROWS.length || (!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length)){
-    el.style.display = 'none'; el.innerHTML = ''; return;
-  }
+  if(!PEDIDOS_ROWS.length){ el.style.display = ''; el.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; return; }
+  if(!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length){ el.style.display = ''; el.innerHTML = '<div class="empty-state">Subí la venta acumulada del mes (Paso 5) y/o la base de ventas (Paso 2).</div>'; return; }
+  if(!fecha){ el.style.display = ''; el.innerHTML = '<div class="empty-state">Elegí una fecha arriba.</div>'; return; }
+  if(!cfg.focos.length){ el.style.display = ''; el.innerHTML = '<div class="empty-state">Elegí al menos un foco arriba para armar los mensajes.</div>'; return; }
   el.style.display = '';
   const guardado = wppLoad();
   const vend = wppVendedores(fecha, cfg);
-  let html = '<div class="card-title">Enviar oportunidades por WhatsApp</div>'
-    + `<div class="hint" style="margin-bottom:12px;">Mensaje para el <b>${wppFechaLabel(fecha)}</b>. Cargá una sola vez el número de cada vendedor (con código de área, sin 0 ni 15: <span class="mono">2994123456</span>); queda guardado en este navegador. El botón abre WhatsApp con el texto listo y vos solo enviás.</div>`;
+  let html = '<div class="card-title">Enviar por WhatsApp a cada vendedor</div>'
+    + `<div class="hint" style="margin-bottom:12px;">Mensaje para el <b>${wppFechaLabel(fecha)}</b> con los focos: <b>${escapeHtml(cfg.focos.map(wppFocoLabel).join(' | '))}</b>. Cargá una sola vez el número de cada vendedor (con código de área, sin 0 ni 15: <span class="mono">2994123456</span>); queda guardado. El botón abre WhatsApp con el texto listo y vos solo enviás.</div>`;
   if(!vend.length){ el.innerHTML = html + '<div class="empty-state">No hay vendedores con pedido ni entrega para esa fecha.</div>'; return; }
-  html += '<div class="hint wpp-status" style="margin-bottom:8px;"></div><div class="scroll-x"><table><thead><tr><th>Vendedor</th><th>Saludo</th><th>WhatsApp</th><th></th></tr></thead><tbody>';
+  html += '<div class="hint wpp-status" style="margin-bottom:8px;"></div><div class="scroll-x"><table><thead><tr><th>Vendedor</th><th class="mono">Con pedido</th><th class="mono">Entrega sin pedido</th><th>Saludo</th><th>WhatsApp</th><th></th></tr></thead><tbody>';
   vend.forEach((v, i) => {
     const k = normText(v), g = guardado[k] || {};
+    const m = buildWppMessage(cfg, fecha, v, 'x');
     html += `<tr data-i="${i}" data-v="${escapeHtml(v)}">
       <td class="strong">${escapeHtml(v)}</td>
+      <td class="mono">${m.nCon}</td><td class="mono">${m.nSin}</td>
       <td><input type="text" class="wpp-nombre" value="${escapeHtml(g.nombre || wppNombre(v))}" style="width:110px"></td>
       <td><input type="text" class="wpp-tel" value="${escapeHtml(g.tel || '')}" placeholder="2994123456" style="width:140px"></td>
       <td style="white-space:nowrap">
@@ -1872,31 +1958,32 @@ function renderWppPanel(cfg){
         <button type="button" class="ghost wpp-copy">Copiar</button>
         <button type="button" class="ghost wpp-prev">Ver</button>
       </td></tr>
-      <tr class="wpp-prev-row" style="display:none"><td colspan="4"><pre class="wpp-pre" style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:13px;"></pre></td></tr>`;
+      <tr class="wpp-prev-row" style="display:none"><td colspan="6"><pre class="wpp-pre" style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:13px;"></pre></td></tr>`;
   });
   html += '</tbody></table></div>';
   el.innerHTML = html;
   const filaDe = t => t.closest('tr');
   const datos = tr => ({ v: tr.dataset.v, nombre: tr.querySelector('.wpp-nombre').value.trim() || wppNombre(tr.dataset.v), tel: tr.querySelector('.wpp-tel').value.trim() });
   const guardar = tr => { const d = datos(tr), o = wppLoad(), prev = o[normText(d.v)] || {}; o[normText(d.v)] = { nombre: d.nombre, tel: d.tel }; wppSave(o); if(prev.tel !== d.tel || prev.nombre !== d.nombre) wppPublishSoon(el.querySelector('.wpp-status')); };
+  const armar = d => buildWppMessage(cfg, fecha, d.v, d.nombre);
   el.querySelectorAll('.wpp-nombre, .wpp-tel').forEach(inp => inp.addEventListener('change', () => guardar(filaDe(inp))));
   el.querySelectorAll('.wpp-send').forEach(b => b.addEventListener('click', () => {
     const tr = filaDe(b); guardar(tr);
     const d = datos(tr), num = wppNumero(d.tel);
     if(!num){ alert('Cargá primero el número de WhatsApp de ' + d.v + '.'); tr.querySelector('.wpp-tel').focus(); return; }
-    const txt = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
-    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(txt), '_blank');
+    const m = armar(d);
+    if(!m.nCon && !m.nSin){ alert('No hay clientes de ' + d.v + ' con oportunidades en estos focos para esa fecha: no hay nada para enviar.'); return; }
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(m.text), '_blank');
   }));
   el.querySelectorAll('.wpp-copy').forEach(b => b.addEventListener('click', async () => {
-    const d = datos(filaDe(b));
-    const txt = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
-    try{ await navigator.clipboard.writeText(txt); b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1500); }
+    const m = armar(datos(filaDe(b)));
+    try{ await navigator.clipboard.writeText(m.text); b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1500); }
     catch(e){ alert('No se pudo copiar automáticamente. Usá "Ver" y copiá el texto a mano.'); }
   }));
   el.querySelectorAll('.wpp-prev').forEach(b => b.addEventListener('click', () => {
-    const tr = filaDe(b), row = tr.nextElementSibling, d = datos(tr);
+    const tr = filaDe(b), row = tr.nextElementSibling;
     if(row.style.display === 'none'){
-      row.querySelector('pre').textContent = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
+      row.querySelector('pre').textContent = armar(datos(tr)).text;
       row.style.display = ''; b.textContent = 'Ocultar';
     } else { row.style.display = 'none'; b.textContent = 'Ver'; }
   }));
@@ -1905,6 +1992,7 @@ function renderWppPanel(cfg){
 function renderCompradoresMes(){
   // refresca las dos pestañas de compradores (Mes y Mes UNG)
   COMPRADORES_CFGS.forEach(renderCompradoresTab);
+  renderNoc();
 }
 
 function exportCompradoresExcel(cfg){
@@ -2143,7 +2231,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbwm70Bm3CNRLr8VLAX1uxlwhHZAJYnr2l4nWJglpj2PkIhkcb2q3TMUjYZY0bG-jFRqiA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbw9z8MbZzOiULMN3MoAdRNEixsP0Fw69pcRyH3S7SB34eGyD6BXNlEUdLO-vKa_Q4ZmwQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -2514,6 +2602,7 @@ document.getElementById('fuera-ruta-vendedor').addEventListener('change', render
 document.getElementById('fuera-ruta-fecha').addEventListener('change', renderFueraDeRuta);
 document.getElementById('btn-export-fuera-ruta').addEventListener('click', exportFueraDeRutaExcel);
 
+document.getElementById('noc-fecha').addEventListener('change', renderNoc);
 COMPRADORES_CFGS.forEach(cfg => {
   document.getElementById(cfg.fechaId).addEventListener('change', () => renderCompradoresTab(cfg));
   document.getElementById(cfg.vendId).addEventListener('change', () => renderCompradoresTab(cfg));
