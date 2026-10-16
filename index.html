@@ -87,6 +87,8 @@
   .tag-ok{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700;background:var(--green-soft);color:var(--green);}
   .flag-si{display:inline-block;padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:var(--green-soft);color:var(--green);}
   .flag-no{display:inline-block;padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:var(--red-soft);color:var(--red);}
+  .flag-vip{background:rgba(124,58,237,.14);box-shadow:inset 3px 0 0 #7c3aed;}
+  .tag-p1p4{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#7c3aed;color:#fff;vertical-align:middle;}
   .flag-oportunidad{background:var(--copper-soft);border:1px solid rgba(200,118,58,.4);}
 
   .empty-state{padding:36px 20px;text-align:center;color:var(--text-faint);font-size:13px;}
@@ -200,7 +202,7 @@ Andes	Core	Lata	24	39400
 
   <div class="card">
     <div class="card-title"><span class="step-num">5</span>Venta acumulada del mes</div>
-    <div class="card-sub">Mismo formato que la base de ventas del Paso 2, pero con todo el mes acumulado. Se usa para saber si cada cliente ya compró Cerveza, UNG, Latón 1890, Michelob o Pure Gold en lo que va del mes.</div>
+    <div class="card-sub">Mismo formato que la base de ventas del Paso 2, pero con todo el mes acumulado. Se usa para saber si cada cliente ya compró CZA, UNG, Innovación Core, Latón 1890, Pure Gold, Michelob o 0.0 en lo que va del mes.</div>
     <div class="dropzone" id="dz-mensual">
       <div class="icon">📅</div>
       <div>Arrastrá el Excel del acumulado del mes acá, o hacé click para elegirlo</div>
@@ -387,7 +389,7 @@ Andes	Core	Lata	24	39400
         </div>
         <button class="ghost" id="btn-export-compradores" type="button">⬇ Exportar a Excel</button>
       </div>
-      <div class="hint">La fecha se toma de la base de Pedidos (Paso 3). Para cada cliente con pedido esa fecha, se marca si ya compró Cerveza / UNG / Latón 1890 / Michelob / Pure Gold en el mes — combinando el acumulado (Paso 5) con la base de ventas (Paso 2), así que si la primera compra de UNG es justo la de hoy, también cuenta como SÍ. El día de la semana para cruzar contra BEES ONE se calcula solo a partir de la fecha elegida.</div>
+      <div class="hint">La fecha se toma de la base de Pedidos (Paso 3). Para cada cliente con pedido esa fecha, se marca si ya compró CZA / UNG / Innovación Core / 1890 / Pure Gold / Michelob / 0.0 en el mes — combinando el acumulado (Paso 5) con la base de ventas (Paso 2), así que si la primera compra de UNG es justo la de hoy, también cuenta como SÍ. El día de la semana para cruzar contra BEES ONE se calcula solo a partir de la fecha elegida.</div>
     </div>
 
     <div class="card">
@@ -474,7 +476,7 @@ const CANAL_LABELS = { 'REF':'Refrigerado / Gastronomía', 'OTROS':'Otros', 'MAY
 const CANAL_ORDER = ['REF','K+T','AS','MAY','OTROS','SIN CLASIF'];
 
 /* columnas (0-based) del export de ventas tipo "perforaciones.xlsx" */
-const COL = { FECHA:2, COD_CLIENTE:4, CLIENTE_DESC:5, RUTA_DESC:9, VENDEDOR_DESC:15, ARTICULO_DESC:18, MARCA_COD:19, MARCA_DESC:20, CALIBRE_COD:22, CALIBRE_DESC:23, UNIDAD_NEGOCIO_COD:34, PRECIO:37, BONIF:38, PRNETO:39, CANT:40, IMP_FINAL:43 };
+const COL = { FECHA:2, COD_CLIENTE:4, CLIENTE_DESC:5, RUTA_DESC:9, VENDEDOR_DESC:15, ARTICULO_COD:17, ARTICULO_DESC:18, MARCA_COD:19, MARCA_DESC:20, CALIBRE_COD:22, CALIBRE_DESC:23, UNIDAD_NEGOCIO_COD:34, PRECIO:37, BONIF:38, PRNETO:39, CANT:40, IMP_FINAL:43 };
 
 function normText(s){
   return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
@@ -764,6 +766,7 @@ function processSalesFile(file){
         marcaCod: parseInt(r[COL.MARCA_COD], 10),
         calibreCod: parseInt(r[COL.CALIBRE_COD], 10),
         unCod: parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10),
+        artCod: parseInt(r[COL.ARTICULO_COD], 10),
         esBlack: normText(articulo).includes('BLACK'),
         articulo,
         prNeto: isFinite(prNeto) ? prNeto : null,
@@ -1436,7 +1439,7 @@ function processMonthlyFile(file){
       if(!marcaCod && !unCod) return; // fila sin datos de producto, la salteamos
       if(!periodo) periodo = String(r[0] || '').replace(/^\(\d+\)\s*/, '').trim(); // "(001) SEP 2026" -> "SEP 2026"
       out.push({
-        codCliente, fecha: r[COL.FECHA], marcaCod, calibreCod, unCod,
+        codCliente, fecha: r[COL.FECHA], marcaCod, calibreCod, unCod, artCod: parseInt(r[COL.ARTICULO_COD], 10),
         vendedor: String(r[COL.VENDEDOR_DESC]||'').trim(),
         cliente: String(r[COL.CLIENTE_DESC]||'').trim(),
         esBlack: normText(r[COL.ARTICULO_DESC]).includes('BLACK')
@@ -1463,20 +1466,28 @@ function weekdayKeyFromDate(dateStr){
 // Definición de los "focos" de cada pestaña de compradores. Cada foco es un SÍ/NO por cliente:
 // ¿compró algo que cumpla `test` en el mes? (acumulado del Paso 5 + base de ventas del Paso 2).
 // row = {marcaCod, calibreCod, unCod, esBlack}
+// Clientes de los Pilares 1 y 4 (P1&P4): a estos hay que meterles Latón 1890 sí o sí.
+const CLIENTES_P1P4 = new Set([81097, 81870, 96927, 103267, 125152, 146189, 149634, 157140, 158260, 158686, 164842, 166276, 167426, 168277, 170323, 172858, 175497, 175697, 178669, 182710, 183333, 184531, 185246, 186229, 187748, 188582, 189887, 303292, 303696, 305364, 305909, 306758, 310334, 310611, 311003, 311942, 316720, 318355, 321752, 323618, 324330, 328370, 330015, 330093, 331742, 332121, 333349, 340142, 342385, 354243, 356780, 357749, 357757, 358824, 360857, 364888, 365526, 366066, 367245, 367825, 369823, 369926, 370469, 370977, 370983, 371309, 372551, 375334, 375567, 375755, 376323, 376620, 377567, 380611, 380792, 380904, 381342, 382770, 382927, 383091, 384057, 385801, 386218, 386354, 386434, 386983, 388777, 389961, 389962, 390011, 390482, 392514, 393658, 395858, 397953, 398178, 398561, 399488, 404255, 404780, 404807, 404808, 405685, 405772, 406422, 406629, 407229, 408555, 408741, 409109, 409318, 410132, 410251, 411030, 411216, 411484, 411894, 411975, 411979, 413277, 414103, 415415, 417259, 417950, 418141, 418153, 418157, 418187, 418862, 419671, 420089, 421140, 422245, 422388, 422587, 423084, 423253, 423254, 423282, 423733, 424527, 424578, 425060, 425481, 426266, 426397, 426466, 426583, 426616, 426731, 426857, 428261, 428281, 428681, 428769, 428778, 428824, 428826, 429308, 429950, 430220, 431040, 431483, 431884, 432832, 433825, 434768, 435001, 435949, 436401, 437147, 437471, 437476, 437993, 439632, 439736, 440072, 440507, 441296, 441758, 441869, 442265, 442374, 442685, 442785, 442931, 443469, 443863, 443954, 444339, 444827, 445407, 445599, 445692, 447500, 447765, 447913, 447931, 447934, 448792, 448908, 449083, 449314, 449447, 449468, 449929, 450290, 450335, 451399, 452065, 452105, 452815, 453280, 453526, 453704, 454458, 455137, 455664, 456321, 456371, 456578, 457505, 458072, 458352, 458852, 459193, 459522, 459719, 459961, 460028, 460773, 460775, 460857, 461085, 461392, 461452, 461975, 462003, 462041, 462060, 462212, 462964, 463746, 463999, 465143, 465196, 465286, 465489, 465519, 465927, 465941, 466014, 466052, 466252, 466477, 467171, 467195, 467219, 467316, 467347, 467389, 467543, 467677, 468327, 468361, 468479, 468694, 468702, 469106, 469342, 469544, 469870, 470087, 470594, 470638, 470716, 470734, 470762, 470896, 470950, 471150, 471303, 471368, 471380, 471587, 471770, 471984, 472079, 472220, 472467, 472483, 472974, 660258, 661073, 662044, 663101, 663179, 663529, 664044, 664109, 664141, 664343, 665330, 665343, 665420, 665452, 665471, 665711, 665831, 665960, 666006, 666011, 666136, 666176, 666177, 673105, 674013, 674017, 674102, 710017, 710079, 710187, 720029, 720059, 720074, 720116, 730072, 911179, 911180, 911196, 911202, 911216, 911225, 911242, 911260, 911263, 911268, 911272, 911277, 911292, 911303, 911308, 911312, 911323, 911342, 911347, 911348, 911351, 911354, 911356, 911358, 911359, 911373, 911375, 911385, 911391, 911409, 911430, 911433, 911443, 911450, 911455, 911460, 911471, 911484, 911487, 911494, 911503, 911520, 911532, 911560, 911569, 911572, 911600, 911687, 911694, 911697, 911740, 911759, 911767, 911796, 911871, 911878, 911887, 911889, 911916, 911930, 911941, 911943, 911945, 911953, 911959, 911963, 911976, 911980, 911988, 911990, 911994, 911999, 912002, 912028, 912043, 912141, 912146, 912161, 912167, 912182, 912184, 912212, 912219, 912223, 912250, 912252, 912263, 912264, 912301, 912305, 912307, 912336, 912339, 912340, 912343, 912345, 912347]);
+const ARTS_INNOVACION_CORE = [15624, 63068, 32471, 32472]; // Código artículo
+const MARCAS_CERO_ALCOHOL = [609, 172, 775];               // Código marca
+const MARCAS_MICHELOB = [88, 356, 531];                    // Código marca
 const COMPRADORES_MES_CFG = {
   id: 'mes', file: 'compradores_mes',
   fechaId: 'compradores-fecha', vendId: 'compradores-vendedor',
   mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores',
   focos: [
-    { key:'cerveza',   label:'Cerveza',    test: r => r.unCod === 1 },                               // Unidad de Negocio (AI) = 1
-    { key:'ung',       label:'UNG',        test: r => r.unCod === 3 },                               // Unidad de Negocio (AI) = 3
-    { key:'laton1890', label:'Latón 1890', test: r => r.marcaCod === 142 && r.calibreCod === 566 },  // Marca (T) 142 + Calibre (W) 566
-    { key:'michelob',  label:'Michelob',   test: r => r.marcaCod === 531 },                          // Marca (T) 531
-    { key:'pureGold',  label:'Pure Gold',  test: r => r.marcaCod === 817 }                           // Marca (T) 817
+    { key:'cza',        label:'CCC CZA',              test: r => r.unCod === 1 },                                  // Unidad de Negocio (AI) = 1
+    { key:'ung',        label:'CCC UNG',              test: r => r.unCod === 3 },                                  // Unidad de Negocio (AI) = 3
+    { key:'innovCore',  label:'CCC Innovación Core',  test: r => ARTS_INNOVACION_CORE.indexOf(r.artCod) !== -1 },  // Código artículo
+    { key:'laton1890',  label:'CCC 1890 (P1&P4)',     test: r => r.marcaCod === 142, vip: CLIENTES_P1P4 }, // Marca 142, todos los calibres
+    { key:'pureGold',   label:'CCC Pure Gold',        test: r => r.marcaCod === 817 },                             // Marca 817
+    { key:'michelob',   label:'CCC Michelob',         test: r => MARCAS_MICHELOB.indexOf(r.marcaCod) !== -1 },     // Marcas 88, 356, 531
+    { key:'cero',       label:'CCC 0.0 Alcohol',      test: r => MARCAS_CERO_ALCOHOL.indexOf(r.marcaCod) !== -1 }  // Marcas 609, 172, 775
   ],
-  highlight: f => f.cerveza && !f.ung,
-  highlightLabel: 'Oportunidad UNG',
-  hint: 'Resaltado en color: compró cerveza pero todavía no compró UNG este mes — oportunidad para ofrecerle.'
+  highlight: null,
+  sortByFaltan: true,
+  compact: true,
+  hint: '"Faltan" es la cantidad de focos que el cliente todavía no compró este mes; los que más faltan salen primero. Los clientes P1&P4 se marcan con una etiqueta violeta y, si todavía no compraron Latón 1890, se destaca toda la fila: son a los que hay que meterles el producto sí o sí.'
 };
 const COMPRADORES_UNG_CFG = {
   id: 'ung', file: 'compradores_mes_ung',
@@ -1640,10 +1651,13 @@ function computeCompradoresMes(fecha, vendedorFiltro, cfg){
       vendedor: Array.from(c.vendedores).join(', '),
       ...flags,
       faltan: cfg.focos.filter(fo => !flags[fo.key]).length,
-      destacar: cfg.highlight ? !!cfg.highlight(flags) : false
+      destacar: cfg.highlight ? !!cfg.highlight(flags) : false,
+      esVip: cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente)),
+      vipFalta: cfg.focos.some(fo => fo.vip && fo.vip.has(c.codCliente) && !flags[fo.key])
     };
   });
   conPedido.sort((a,b) => {
+    if(a.vipFalta !== b.vipFalta) return a.vipFalta ? -1 : 1;
     if(cfg.sortByFaltan && b.faltan !== a.faltan) return b.faltan - a.faltan;
     if(!cfg.sortByFaltan && a.destacar !== b.destacar) return a.destacar ? -1 : 1;
     return a.cliente.localeCompare(b.cliente,'es');
@@ -1723,8 +1737,8 @@ function renderCompradoresTab(cfg){
       + (cfg.sortByFaltan ? '<th class="mono">Faltan</th>' : '')
       + '</tr></thead><tbody>';
     conPedido.forEach(c => {
-      html += `<tr class="${c.destacar ? 'flag-oportunidad' : ''}">
-        <td class="mono">${c.codCliente}</td>
+      html += `<tr class="${c.destacar ? 'flag-oportunidad' : (c.vipFalta ? 'flag-vip' : '')}">
+        <td class="mono">${c.codCliente}${c.esVip ? '<span class="tag-p1p4">P1&amp;P4</span>' : ''}</td>
         <td class="strong">${escapeHtml(c.cliente)}</td>
         <td>${escapeHtml(c.vendedor)}</td>
         ${cfg.focos.map(fo => `<td>${flagBadge(c[fo.key])}</td>`).join('')}
@@ -1751,9 +1765,11 @@ function exportCompradoresExcel(cfg){
   const { conPedido, sinPedido } = computeCompradoresMes(fecha, vendedorFiltro, cfg);
 
   const extraLabel = cfg.highlight ? cfg.highlightLabel : 'Focos que faltan';
-  const header1 = ['Cód. Cliente','Razón Social','Vendedor', ...cfg.focos.map(fo => fo.label), extraLabel];
+  const hayVip = cfg.focos.some(fo => fo.vip);
+  const header1 = ['Cód. Cliente','Razón Social','Vendedor', ...(hayVip ? ['P1&P4'] : []), ...cfg.focos.map(fo => fo.label), extraLabel];
   const aoa1 = [header1, ...conPedido.map(c => [
     c.codCliente, c.cliente, c.vendedor,
+    ...(hayVip ? [c.esVip ? 'Sí' : 'No'] : []),
     ...cfg.focos.map(fo => c[fo.key] ? 'Sí' : 'No'),
     cfg.highlight ? (c.destacar ? 'Sí' : 'No') : c.faltan
   ])];
@@ -1838,23 +1854,7 @@ function stepPayload(key){
     case 'sales':   return { rows: ALL_SALES_RAW };          // las perforaciones se recalculan contra el PTR al restaurar
     case 'pedidos': return { rows: PEDIDOS_ROWS };
     case 'visita':  return { map: VISITA_MAP };
-    case 'mensual': {
-      // Se compacta para no saturar Google Apps Script: 1 fila por cliente y producto foco comprado
-      const vistos = new Set();
-      const rowsCompactas = [];
-      MONTHLY_SALES_ROWS.forEach(r => {
-        const k = `${r.codCliente}|${r.marcaCod}|${r.calibreCod}|${r.unCod}|${r.esBlack?1:0}`;
-        if (!vistos.has(k)) {
-          vistos.add(k);
-          rowsCompactas.push(r);
-        }
-      });
-      return { 
-        rows: rowsCompactas, 
-        totalRenglonesOriginales: MONTHLY_SALES_ROWS.length, 
-        periodo: MONTHLY_PERIODO 
-      };
-    }
+    case 'mensual': return { rows: MONTHLY_SALES_ROWS, periodo: MONTHLY_PERIODO };
     case 'activos': return { map: CLIENTES_ACTIVOS };
   }
   return null;
@@ -1992,7 +1992,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbyj_fxZh00S5jLIr4qey7HGJQN5krkyV0QR9aIhiW2nTRCXI9kZ8OC17H1x_u9ajioDhA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = '';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -2006,6 +2006,10 @@ function isAdminHash(){
   const raw = (typeof location !== 'undefined' && location.hash) ? location.hash.replace(/^#/, '').toLowerCase() : '';
   return raw === 'admin';
 }
+// El modo administrador se recuerda en esta pestaña (sessionStorage): así F5 no lo pierde
+// aunque "#admin" ya no esté en la barra. Se activa al entrar con #admin y se apaga con #ver.
+function adminFlagGet(){ try{ return sessionStorage.getItem('ccd_admin') === '1'; }catch(e){ return false; } }
+function adminFlagSet(v){ try{ if(v) sessionStorage.setItem('ccd_admin','1'); else sessionStorage.removeItem('ccd_admin'); }catch(e){} }
 
 let __jsonpSeq = 0;
 function jsonpRequest(url, timeoutMs){
@@ -2018,8 +2022,7 @@ function jsonpRequest(url, timeoutMs){
     const cbName = '__ccd_cb_' + Date.now().toString(36) + '_' + (__jsonpSeq++);
     const script = document.createElement('script');
     let done = false;
-    // Cambiar 30000 por 60000:
-	const timer = setTimeout(() => finish(reject, new Error('Tiempo de espera agotado')), timeoutMs || 60000);
+    const timer = setTimeout(() => finish(reject, new Error('Tiempo de espera agotado')), timeoutMs || 30000);
     function finish(fn, val){
       if(done) return;
       done = true;
@@ -2258,7 +2261,9 @@ function startSharedPolling(){
       const cambio = lst.items.length !== Object.keys(SHARED_META).length
         || lst.items.some(it => !SHARED_META[it.key] || SHARED_META[it.key].uploadId !== it.uploadId);
       if(cambio) await sharedReload();
-    } catch(e){ /* sin conexión: se reintenta en el próximo ciclo */ }
+    } catch(e){
+      if(/Cargando datos compartidos/.test((document.getElementById('persist-banner')||{}).textContent || '')) setBanner('⚠ No se pudo actualizar desde el servidor compartido: ' + ((e && e.message) || e) + '. Se reintenta solo en unos minutos.');
+    }
   }, 300000);
 }
 
@@ -2275,7 +2280,9 @@ async function startLocal(){
 
 async function bootstrap(){
   if(!sharedActive()){ await startLocal(); return; }
-  const admin = isAdminHash();
+  const hashRaw = (location.hash || '').replace(/^#/, '').toLowerCase();
+  if(hashRaw === 'admin') adminFlagSet(true); else if(hashRaw === 'ver') adminFlagSet(false);
+  const admin = adminFlagGet();
   if(typeof history !== 'undefined'){ try{ history.replaceState(null, '', location.pathname + location.search); } catch(e){} } // no deja "#admin" a la vista en la barra
   setBanner('☁ Conectando con el servidor compartido…');
   let netErr = null;
@@ -2398,6 +2405,12 @@ const btnPubAll = document.getElementById('btn-publish-all');
 if(btnPubAll) btnPubAll.addEventListener('click', publishAll);
 
 // al abrir la página: modo compartido (si hay servidor configurado) o modo local
+window.addEventListener('hashchange', () => {
+  const h = (location.hash || '').replace(/^#/, '').toLowerCase();
+  if(!sharedActive() || (h !== 'admin' && h !== 'ver')) return;
+  adminFlagSet(h === 'admin');
+  location.reload();
+});
 bootstrap();
 
 </script>
