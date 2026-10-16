@@ -681,6 +681,7 @@ function renderMinPreview(sourceLabel){
 /* ============================================================
    PASO 2: BASE DE VENTAS
    ============================================================ */
+function fmtDesc(v){ return (v === null || v === undefined || !isFinite(v)) ? '<span style="color:var(--text-faint)">—</span>' : v.toLocaleString('es-AR', {maximumFractionDigits:1}) + '%'; }
 let SALES_ROWS = []; // filas crudas cruzadas: {vendedor, cliente, ruta, marca, calibre, articulo, fecha, precio, bonif, prNeto, cant, minRow}
 let UNMAPPED_SALES_SAMPLES = new Map(); // marca|calibre no reconocidos -> count (informativo, no bloqueante)
 
@@ -718,6 +719,7 @@ function rebuildSalesRows(){
       pack: minRow.pack,
       fecha: r.fecha,
       prNeto: r.prNeto === undefined ? null : r.prNeto,
+      descPct: r.descPct === undefined ? null : r.descPct,
       precioFinal,
       cant: r.cant,
       ptrMin: minRow.ptrMin,
@@ -754,6 +756,8 @@ function processSalesFile(file){
       const cant = parseFloat(r[COL.CANT]) || 0;
       const impFinal = parseFloat(r[COL.IMP_FINAL]);
       const prNeto = parseFloat(r[COL.PRNETO]);
+      const precioLista = parseFloat(r[COL.PRECIO]);
+      const bonif = parseFloat(r[COL.BONIF]);
       if(cant <= 0 || !isFinite(impFinal) || impFinal <= 0) return;
 
       const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
@@ -774,6 +778,8 @@ function processSalesFile(file){
         esBlack: normText(articulo).includes('BLACK'),
         articulo,
         prNeto: isFinite(prNeto) ? prNeto : null,
+        // descuento: columna Bonific (fracción, 0,09 = 9%); si no vino, se deduce de Precio vs Pr Neto
+        descPct: isFinite(bonif) ? bonif * 100 : (isFinite(precioLista) && precioLista > 0 && isFinite(prNeto) ? (1 - prNeto / precioLista) * 100 : null),
         fecha: r[COL.FECHA], cant, impFinal
       });
     });
@@ -962,6 +968,7 @@ function renderDetailTable(rows){
     {key:'ptrMin', label:'PTR Mín', mono:true},
     {key:'precioFinal', label:'Precio Final/bulto', mono:true},
     {key:'prNeto', label:'Precio Neto (ref.)', mono:true},
+    {key:'descPct', label:'Descuento', mono:true},
     {key:'cant', label:'Bultos', mono:true},
     {key:'diff', label:'Diferencia/bulto', mono:true},
     {key:'impacto', label:'Impacto $', mono:true},
@@ -984,6 +991,7 @@ function renderDetailTable(rows){
       <td class="mono">${fmtMoney(r.ptrMin)}</td>
       <td class="mono strong">${fmtMoney(r.precioFinal)}</td>
       <td class="mono" style="color:var(--text-faint);">${fmtMoney(r.prNeto)}</td>
+      <td class="mono">${fmtDesc(r.descPct)}</td>
       <td class="mono">${r.cant.toLocaleString('es-AR', {maximumFractionDigits:2})}</td>
       <td class="mono ${diffCls}">${r.diff>=0?'+':''}${fmtMoney(r.diff)}</td>
       <td class="mono ${diffCls}">${impacto>=0?'+':''}${fmtMoney(impacto)}</td>
@@ -1024,11 +1032,11 @@ function exportPerforacionesExcel(){
     if(typeof av === 'string') return av.localeCompare(bv,'es') * sortState.dir;
     return ((av||0) - (bv||0)) * sortState.dir;
   });
-  const header = ['Vendedor','Cód. Cliente','Cliente','Canal','Marca','Pack','Fecha','PTR Mínimo','Precio Final/bulto','Precio Neto (ref.)','Bultos','Diferencia/bulto','Impacto $','Estado'];
+  const header = ['Vendedor','Cód. Cliente','Cliente','Canal','Marca','Pack','Fecha','PTR Mínimo','Precio Final/bulto','Precio Neto (ref.)','Descuento %','Bultos','Diferencia/bulto','Impacto $','Estado'];
   const aoa = [header, ...rows.map(r => [
     r.vendedor, r.codCliente, r.cliente, CANAL_LABELS[r.canal]||r.canal, r.marca, r.pack,
     r.fecha instanceof Date ? r.fecha.toLocaleDateString('es-AR') : r.fecha,
-    r.ptrMin, r.precioFinal, r.prNeto, r.cant, r.diff, r.diff*r.cant, r.diff<0?'PERFORA':'OK'
+    r.ptrMin, r.precioFinal, r.prNeto, (r.descPct === null || r.descPct === undefined) ? '' : Math.round(r.descPct * 100) / 100, r.cant, r.diff, r.diff*r.cant, r.diff<0?'PERFORA':'OK'
   ])];
   exportToExcel(`perforaciones_${todayStamp()}.xlsx`, 'Perforaciones', aoa);
 }
