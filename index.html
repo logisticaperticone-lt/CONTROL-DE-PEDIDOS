@@ -401,6 +401,8 @@ Andes	Core	Lata	24	39400
       <div class="card-title">Tienen entrega esa fecha pero no cargaron ningún pedido</div>
       <div class="scroll-x" id="table-compradores-sin-pedido"></div>
     </div>
+
+    <div class="card" id="wpp-mes"></div>
   </div>
 
   <!-- ============== TAB: COMPRADORES DEL MES UNG ============== -->
@@ -429,6 +431,8 @@ Andes	Core	Lata	24	39400
       <div class="card-title">Tienen entrega esa fecha pero no cargaron ningún pedido</div>
       <div class="scroll-x" id="table-compradores-ung-sin-pedido"></div>
     </div>
+
+    <div class="card" id="wpp-ung"></div>
   </div>
 
 </div>
@@ -1474,15 +1478,15 @@ const MARCAS_MICHELOB = [88, 356, 531];                    // Código marca
 const COMPRADORES_MES_CFG = {
   id: 'mes', file: 'compradores_mes',
   fechaId: 'compradores-fecha', vendId: 'compradores-vendedor',
-  mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores',
+  mainId: 'table-compradores-mes', sinId: 'table-compradores-sin-pedido', exportId: 'btn-export-compradores', wppId: 'wpp-mes',
   focos: [
-    { key:'cza',        label:'CCC CZA',              test: r => r.unCod === 1 },                                  // Unidad de Negocio (AI) = 1
-    { key:'ung',        label:'CCC UNG',              test: r => r.unCod === 3 },                                  // Unidad de Negocio (AI) = 3
-    { key:'innovCore',  label:'CCC Innovación Core',  test: r => ARTS_INNOVACION_CORE.indexOf(r.artCod) !== -1 },  // Código artículo
-    { key:'laton1890',  label:'CCC 1890 (P1&P4)',     test: r => r.marcaCod === 142, vip: CLIENTES_P1P4 }, // Marca 142, todos los calibres
-    { key:'pureGold',   label:'CCC Pure Gold',        test: r => r.marcaCod === 817 },                             // Marca 817
-    { key:'michelob',   label:'CCC Michelob',         test: r => MARCAS_MICHELOB.indexOf(r.marcaCod) !== -1 },     // Marcas 88, 356, 531
-    { key:'cero',       label:'CCC 0.0 Alcohol',      test: r => MARCAS_CERO_ALCOHOL.indexOf(r.marcaCod) !== -1 }  // Marcas 609, 172, 775
+    { key:'cza', short:'CZA',        label:'CCC CZA',              test: r => r.unCod === 1 },                                  // Unidad de Negocio (AI) = 1
+    { key:'ung', short:'UNG',        label:'CCC UNG',              test: r => r.unCod === 3 },                                  // Unidad de Negocio (AI) = 3
+    { key:'innovCore', short:'Innovación',  label:'CCC Innovación Core',  test: r => ARTS_INNOVACION_CORE.indexOf(r.artCod) !== -1 },  // Código artículo
+    { key:'laton1890', short:'1890',  label:'CCC 1890 (P1&P4)',     test: r => r.marcaCod === 142, vip: CLIENTES_P1P4 }, // Marca 142, todos los calibres
+    { key:'pureGold', short:'Pure Gold',   label:'CCC Pure Gold',        test: r => r.marcaCod === 817 },                             // Marca 817
+    { key:'michelob', short:'Michelob',   label:'CCC Michelob',         test: r => MARCAS_MICHELOB.indexOf(r.marcaCod) !== -1 },     // Marcas 88, 356, 531
+    { key:'cero', short:'0.0',       label:'CCC 0.0 Alcohol',      test: r => MARCAS_CERO_ALCOHOL.indexOf(r.marcaCod) !== -1 }  // Marcas 609, 172, 775
   ],
   highlight: null,
   sortByFaltan: true,
@@ -1492,7 +1496,7 @@ const COMPRADORES_MES_CFG = {
 const COMPRADORES_UNG_CFG = {
   id: 'ung', file: 'compradores_mes_ung',
   fechaId: 'compradores-ung-fecha', vendId: 'compradores-ung-vendedor',
-  mainId: 'table-compradores-ung', sinId: 'table-compradores-ung-sin-pedido', exportId: 'btn-export-compradores-ung',
+  mainId: 'table-compradores-ung', sinId: 'table-compradores-ung-sin-pedido', exportId: 'btn-export-compradores-ung', wppId: 'wpp-ung',
   focos: [
     { key:'cccUng',     label:'CCC UNG',         test: r => r.unCod === 3 },       // Unidad de Negocio (AI) = 3
     { key:'pepsiBlack', label:'CCC Pepsi Black', test: r => r.esBlack === true },  // columna S (artículo) contiene "BLACK"
@@ -1718,6 +1722,7 @@ function renderSinPedidoTable(elSin, fecha, vendedorFiltro, sinPedido, sinVended
 }
 
 function renderCompradoresTab(cfg){
+  renderWppPanel(cfg);
   const elMain = document.getElementById(cfg.mainId);
   const elSin = document.getElementById(cfg.sinId);
   const fecha = document.getElementById(cfg.fechaId).value;
@@ -1751,6 +1756,142 @@ function renderCompradoresTab(cfg){
   }
 
   renderSinPedidoTable(elSin, fecha, vendedorFiltro, sinPedido, sinVendedorConocido);
+}
+
+
+/* ============================================================
+   ENVÍO POR WHATSAPP (semiautomático)
+   Arma un mensaje de texto por vendedor con sus oportunidades y abre WhatsApp con el
+   número y el texto ya cargados; solo hay que apretar "enviar". Los números se guardan
+   en este navegador (localStorage), no se publican.
+   ============================================================ */
+const WPP_KEY = 'ccd_wpp_v1';
+function wppLoad(){ try{ return JSON.parse(localStorage.getItem(WPP_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function wppSave(o){ try{ localStorage.setItem(WPP_KEY, JSON.stringify(o)); }catch(e){} }
+let WPP_PUB_TIMER = null;
+function wppPublishSoon(statusEl){
+  // el administrador publica los números junto con el resto de los datos: se cargan una sola vez y valen en cualquier compu
+  if(!(sharedActive() && SHARED_ROLE === 'admin')) return;
+  if(statusEl) statusEl.textContent = '☁ Guardando números…';
+  clearTimeout(WPP_PUB_TIMER);
+  WPP_PUB_TIMER = setTimeout(async () => {
+    const r = await publishStep('telefonos');
+    if(!statusEl) return;
+    statusEl.textContent = r.ok
+      ? '☁ Números guardados: no hace falta volver a cargarlos (valen desde cualquier compu con #admin).'
+      : '⚠ No se pudieron guardar en la nube (' + r.error + '): quedan solo en este navegador. Si recién actualizaste la página, falta actualizar también el Apps Script (te lo indica la guía).';
+  }, 800);
+}
+function wppNumero(raw){
+  let d = String(raw || '').replace(/\D/g, '');
+  if(!d) return '';
+  d = d.replace(/^0+/, '');
+  if(d.indexOf('54') !== 0) d = '549' + d;               // sin código de país: Argentina, celular
+  else if(d.indexOf('549') !== 0) d = '549' + d.slice(2); // 54 sin el 9 de celular
+  d = d.replace(/^(549\d{2,4}?)15(\d{6,8})$/, '$1$2');    // saca el "15" si quedó
+  return d;
+}
+function wppNombre(v){
+  const t = String(v || '').trim().split(/\s+/)[0] || '';
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+function wppTitleCase(s){
+  return String(s || '').toLowerCase().replace(/(^|[\s.\-\/])([a-záéíóúñü])/g, (m, a, b) => a + b.toUpperCase());
+}
+function wppFocoLabel(fo){ return fo.short || fo.label.replace(/^CCC\s*/i, '').replace(/\s*\(.*\)\s*$/, ''); }
+function wppFechaLabel(fecha){
+  const [y, m, d] = fecha.split('-');
+  return `${DIA_LABEL[weekdayKeyFromDate(fecha)]} ${d}/${m}`;
+}
+function wppVendedores(fecha, cfg){
+  const vistos = new Map();
+  const sumar = v => { const k = normText(v); if(k && !vistos.has(k)) vistos.set(k, String(v).replace(/\s+/g, ' ').trim()); };
+  PEDIDOS_ROWS.filter(p => dateKeyOf(p.fecha) === fecha).forEach(p => sumar(p.vendedor));
+  computeCompradoresMes(fecha, '', cfg).sinPedido.forEach(s => sumar(s.vendedor));
+  return Array.from(vistos.values()).sort((a, b) => a.localeCompare(b, 'es'));
+}
+function buildWppMessage(cfg, fecha, vendedor, saludo){
+  const res = computeCompradoresMes(fecha, vendedor, cfg);
+  const flags = computeClientFlags(cfg);
+  const opsDe = f => cfg.focos.filter(fo => !f[fo.key]).map(wppFocoLabel);
+  const vipDe = code => cfg.focos.some(fo => fo.vip && fo.vip.has(code));
+  const dia = wppFechaLabel(fecha);
+
+  const conOps = res.conPedido.filter(c => c.faltan > 0);
+  const completos = res.conPedido.length - conOps.length;
+  let msg = `Hola ${saludo}, te paso las oportunidades para los clientes que tienen pedido para el *${dia}*:\n`;
+
+  msg += `\n✅ *CON PEDIDO* (${res.conPedido.length})\n`;
+  if(!res.conPedido.length) msg += 'Ninguno cargó pedido para ese día.\n';
+  conOps.forEach(c => {
+    msg += `• *${c.codCliente}* ${wppTitleCase(c.cliente)}${c.esVip ? ' (P1&P4)' : ''}: oportunidad en ${opsDe(c).join(' | ')}\n`;
+  });
+  if(res.conPedido.length && !conOps.length) msg += 'Todos ya compraron todos los focos 👏\n';
+  else if(completos > 0) msg += `(+${completos} cliente${completos === 1 ? '' : 's'} sin oportunidades pendientes)\n`;
+
+  msg += `\n⚠️ *TIENEN ENTREGA Y NO PIDIERON* (${res.sinPedido.length})\n`;
+  if(!res.sinPedido.length) msg += 'Todos los que tienen entrega ya cargaron pedido 👍\n';
+  res.sinPedido.slice().sort((x, y) => (vipDe(y.codCliente) ? 1 : 0) - (vipDe(x.codCliente) ? 1 : 0)).forEach(sp => {
+    const f = flags.get(sp.codCliente) || {};
+    const ops = opsDe(f);
+    const txt = !ops.length ? 'ya compró todos los focos' : (ops.length === cfg.focos.length ? 'oportunidad en todo' : 'oportunidad en ' + ops.join(' | '));
+    msg += `• *${sp.codCliente}* ${wppTitleCase(sp.razonSocial || '(sin razón social)')}${vipDe(sp.codCliente) ? ' (P1&P4)' : ''}: ${txt}\n`;
+  });
+  return msg.trim();
+}
+function renderWppPanel(cfg){
+  const el = document.getElementById(cfg.wppId);
+  if(!el) return;
+  const fecha = document.getElementById(cfg.fechaId).value;
+  if(!fecha || !PEDIDOS_ROWS.length || (!MONTHLY_SALES_ROWS.length && !ALL_SALES_RAW.length)){
+    el.style.display = 'none'; el.innerHTML = ''; return;
+  }
+  el.style.display = '';
+  const guardado = wppLoad();
+  const vend = wppVendedores(fecha, cfg);
+  let html = '<div class="card-title">Enviar oportunidades por WhatsApp</div>'
+    + `<div class="hint" style="margin-bottom:12px;">Mensaje para el <b>${wppFechaLabel(fecha)}</b>. Cargá una sola vez el número de cada vendedor (con código de área, sin 0 ni 15: <span class="mono">2994123456</span>); queda guardado en este navegador. El botón abre WhatsApp con el texto listo y vos solo enviás.</div>`;
+  if(!vend.length){ el.innerHTML = html + '<div class="empty-state">No hay vendedores con pedido ni entrega para esa fecha.</div>'; return; }
+  html += '<div class="hint wpp-status" style="margin-bottom:8px;"></div><div class="scroll-x"><table><thead><tr><th>Vendedor</th><th>Saludo</th><th>WhatsApp</th><th></th></tr></thead><tbody>';
+  vend.forEach((v, i) => {
+    const k = normText(v), g = guardado[k] || {};
+    html += `<tr data-i="${i}" data-v="${escapeHtml(v)}">
+      <td class="strong">${escapeHtml(v)}</td>
+      <td><input type="text" class="wpp-nombre" value="${escapeHtml(g.nombre || wppNombre(v))}" style="width:110px"></td>
+      <td><input type="text" class="wpp-tel" value="${escapeHtml(g.tel || '')}" placeholder="2994123456" style="width:140px"></td>
+      <td style="white-space:nowrap">
+        <button type="button" class="ghost wpp-send">💬 Enviar por WhatsApp</button>
+        <button type="button" class="ghost wpp-copy">Copiar</button>
+        <button type="button" class="ghost wpp-prev">Ver</button>
+      </td></tr>
+      <tr class="wpp-prev-row" style="display:none"><td colspan="4"><pre class="wpp-pre" style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:13px;"></pre></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+  const filaDe = t => t.closest('tr');
+  const datos = tr => ({ v: tr.dataset.v, nombre: tr.querySelector('.wpp-nombre').value.trim() || wppNombre(tr.dataset.v), tel: tr.querySelector('.wpp-tel').value.trim() });
+  const guardar = tr => { const d = datos(tr), o = wppLoad(), prev = o[normText(d.v)] || {}; o[normText(d.v)] = { nombre: d.nombre, tel: d.tel }; wppSave(o); if(prev.tel !== d.tel || prev.nombre !== d.nombre) wppPublishSoon(el.querySelector('.wpp-status')); };
+  el.querySelectorAll('.wpp-nombre, .wpp-tel').forEach(inp => inp.addEventListener('change', () => guardar(filaDe(inp))));
+  el.querySelectorAll('.wpp-send').forEach(b => b.addEventListener('click', () => {
+    const tr = filaDe(b); guardar(tr);
+    const d = datos(tr), num = wppNumero(d.tel);
+    if(!num){ alert('Cargá primero el número de WhatsApp de ' + d.v + '.'); tr.querySelector('.wpp-tel').focus(); return; }
+    const txt = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(txt), '_blank');
+  }));
+  el.querySelectorAll('.wpp-copy').forEach(b => b.addEventListener('click', async () => {
+    const d = datos(filaDe(b));
+    const txt = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
+    try{ await navigator.clipboard.writeText(txt); b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1500); }
+    catch(e){ alert('No se pudo copiar automáticamente. Usá "Ver" y copiá el texto a mano.'); }
+  }));
+  el.querySelectorAll('.wpp-prev').forEach(b => b.addEventListener('click', () => {
+    const tr = filaDe(b), row = tr.nextElementSibling, d = datos(tr);
+    if(row.style.display === 'none'){
+      row.querySelector('pre').textContent = buildWppMessage(cfg, document.getElementById(cfg.fechaId).value, d.v, d.nombre);
+      row.style.display = ''; b.textContent = 'Ocultar';
+    } else { row.style.display = 'none'; b.textContent = 'Ver'; }
+  }));
 }
 
 function renderCompradoresMes(){
@@ -1856,6 +1997,7 @@ function stepPayload(key){
     case 'visita':  return { map: VISITA_MAP };
     case 'mensual': return { rows: MONTHLY_SALES_ROWS, periodo: MONTHLY_PERIODO };
     case 'activos': return { map: CLIENTES_ACTIVOS };
+    case 'telefonos': return { tel: wppLoad() };
   }
   return null;
 }
@@ -1868,6 +2010,7 @@ function stepRestore(key, v){
     case 'visita':  VISITA_MAP = v.map instanceof Map ? v.map : new Map(); break;
     case 'mensual': MONTHLY_SALES_ROWS = Array.isArray(v.rows) ? v.rows : []; MONTHLY_PERIODO = v.periodo || ''; break;
     case 'activos': CLIENTES_ACTIVOS = v.map instanceof Map ? v.map : new Map(); break;
+    case 'telefonos': if(SHARED_ROLE === 'admin' && v.tel && typeof v.tel === 'object') wppSave(Object.assign({}, wppLoad(), v.tel)); break; // los números publicados completan los locales (solo para el admin)
   }
 }
 function stepClear(key){
@@ -1992,12 +2135,12 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = '';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzpYCMwWGo4w72z-5NDvNJgCWfVdTTO1ApHIBci7CTEppvvw9-FSd6pLLpXpHR7w8PA6g/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
 let SHARED_CHUNK = 6000; // caracteres por parte — chico a propósito: viaja adentro de una URL (ver sharedApi)
-const SHARED_LABEL = { min:'PTR Mínimo', sales:'Base de ventas', pedidos:'Pedidos', visita:'Días de entrega (BEES ONE)', mensual:'Acumulado del mes', activos:'Clientes activos' };
+const SHARED_LABEL = { telefonos:'Teléfonos de vendedores', min:'PTR Mínimo', sales:'Base de ventas', pedidos:'Pedidos', visita:'Días de entrega (BEES ONE)', mensual:'Acumulado del mes', activos:'Clientes activos' };
 
 function sharedActive(){ return !!SHARED_API_URL; }
 function setBanner(t){ const b = document.getElementById('persist-banner'); if(b) b.textContent = t; }
@@ -2136,7 +2279,7 @@ async function loadShared(){
   if(!lst.ok) throw new Error(lst.error || 'no se pudo leer la lista');
   SHARED_META = {};
   lst.items.forEach(it => { SHARED_META[it.key] = it; });
-  const keys = Object.keys(STEP_STATUS);
+  const keys = Object.keys(STEP_STATUS).concat(['telefonos']);
   const presentes = keys.filter(k => SHARED_META[k]);
   keys.filter(k => !SHARED_META[k]).forEach(k => stepRestore(k, null)); // lo que ya no está publicado se vacía de memoria
   let hechos = 0;
