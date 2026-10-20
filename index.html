@@ -771,6 +771,7 @@ function processSalesFile(file){
   readFileAsRows(file).then(rows => {
     const dataRows = rows.slice(1);
     const outAll = [];
+    const outBonif = []; // renglones sin cargo (importe 0, ej. bonificados 100%): no entran a precios, pero SÍ cuentan como compra de un foco
 
     dataRows.forEach(r => {
       if(!r || r.length < COL.IMP_FINAL+1) return;
@@ -782,7 +783,18 @@ function processSalesFile(file){
       const prNeto = parseFloat(r[COL.PRNETO]);
       const precioLista = parseFloat(r[COL.PRECIO]);
       const bonif = parseFloat(r[COL.BONIF]);
-      if(cant <= 0 || !isFinite(impFinal) || impFinal <= 0) return;
+      if(cant <= 0) return;
+      if(!isFinite(impFinal) || impFinal <= 0){
+        const codB = parseInt(r[COL.COD_CLIENTE], 10);
+        if(codB) outBonif.push({
+          codCliente: codB, fecha: r[COL.FECHA],
+          marcaCod: parseInt(r[COL.MARCA_COD], 10), calibreCod: parseInt(r[COL.CALIBRE_COD], 10),
+          unCod: parseInt(r[COL.UNIDAD_NEGOCIO_COD], 10), artCod: parseInt(r[COL.ARTICULO_COD], 10),
+          esBlack: normText(r[COL.ARTICULO_DESC]).includes('BLACK'),
+          vendedor: String(r[COL.VENDEDOR_DESC]||'').trim(), cliente: String(r[COL.CLIENTE_DESC]||'').trim()
+        });
+        return;
+      }
 
       const codCliente = parseInt(r[COL.COD_CLIENTE], 10);
       const articulo = String(r[COL.ARTICULO_DESC]||'').trim();
@@ -809,6 +821,7 @@ function processSalesFile(file){
     });
 
     ALL_SALES_RAW = outAll;
+    BONIF_SALES_ROWS = outBonif;
     const { matched } = rebuildSalesRows();
     statusEl.innerHTML = salesStatusHtml(dataRows.length, matched);
     tryRunCross();
@@ -828,6 +841,7 @@ function processSalesFile(file){
    ============================================================ */
 let excludedVendors = new Set();
 let sortState = {col:'diff', dir:1};
+let BONIF_SALES_ROWS = []; // renglones sin cargo de la base de ventas (solo para saber qué compró cada cliente)
 let ALL_SALES_RAW = []; // TODAS las filas válidas de la base de ventas (para Extraordinarias y Fuera de Ruta)
 
 function tryRunCross(){
@@ -1592,6 +1606,7 @@ function computeClientFlags(cfg){
   };
   MONTHLY_SALES_ROWS.forEach(apply);
   ALL_SALES_RAW.forEach(apply);
+  BONIF_SALES_ROWS.forEach(apply);
   return flags;
 }
 function computeClientMonthFlags(){ return computeClientFlags(COMPRADORES_MES_CFG); }
@@ -2088,7 +2103,7 @@ async function persistDelete(key){
 function stepPayload(key){
   switch(key){
     case 'min':     return { table: MIN_TABLE, source: MIN_SOURCE_LABEL };
-    case 'sales':   return { rows: ALL_SALES_RAW };          // las perforaciones se recalculan contra el PTR al restaurar
+    case 'sales':   return { rows: ALL_SALES_RAW, bonif: BONIF_SALES_ROWS };          // las perforaciones se recalculan contra el PTR al restaurar
     case 'pedidos': return { rows: PEDIDOS_ROWS };
     case 'visita':  return { map: VISITA_MAP };
     case 'mensual': return { rows: MONTHLY_SALES_ROWS, periodo: MONTHLY_PERIODO };
@@ -2101,7 +2116,7 @@ function stepRestore(key, v){
   v = v || {};
   switch(key){
     case 'min':     MIN_TABLE = Array.isArray(v.table) ? v.table : []; MIN_SOURCE_LABEL = v.source || ''; break;
-    case 'sales':   ALL_SALES_RAW = Array.isArray(v.rows) ? v.rows : []; break;
+    case 'sales':   ALL_SALES_RAW = Array.isArray(v.rows) ? v.rows : []; BONIF_SALES_ROWS = Array.isArray(v.bonif) ? v.bonif : []; break;
     case 'pedidos': PEDIDOS_ROWS = Array.isArray(v.rows) ? v.rows : []; break;
     case 'visita':  VISITA_MAP = v.map instanceof Map ? v.map : new Map(); break;
     case 'mensual': MONTHLY_SALES_ROWS = Array.isArray(v.rows) ? v.rows : []; MONTHLY_PERIODO = v.periodo || ''; break;
@@ -2112,7 +2127,7 @@ function stepRestore(key, v){
 function stepClear(key){
   switch(key){
     case 'min':     MIN_TABLE = []; MIN_SOURCE_LABEL = ''; UNMAPPED_MIN = []; { const pv = document.getElementById('min-preview'); if(pv) pv.innerHTML = ''; } rebuildSalesRows(); break;
-    case 'sales':   ALL_SALES_RAW = []; SALES_ROWS = []; UNMAPPED_SALES_SAMPLES = new Map(); break;
+    case 'sales':   ALL_SALES_RAW = []; BONIF_SALES_ROWS = []; SALES_ROWS = []; UNMAPPED_SALES_SAMPLES = new Map(); break;
     case 'pedidos': PEDIDOS_ROWS = []; break;
     case 'visita':  VISITA_MAP = new Map(); break;
     case 'mensual': MONTHLY_SALES_ROWS = []; MONTHLY_PERIODO = ''; break;
@@ -2231,7 +2246,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbw9z8MbZzOiULMN3MoAdRNEixsP0Fw69pcRyH3S7SB34eGyD6BXNlEUdLO-vKa_Q4ZmwQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzFafoisU9F3WEaRmcuaA-ViRVQnWqjuvWt9fc2o4F5KHFvoolO2Pc4aT-g8i6cN2XhmQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
