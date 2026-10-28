@@ -451,10 +451,19 @@ Andes	Core	Lata	24	39400
           <label>Fecha de pedido ("mañana")</label>
           <select id="noc-fecha"><option value="">Elegí una fecha…</option></select>
         </div>
+        <div class="field">
+          <label>Vendedor</label>
+          <select id="noc-vendedor"><option value="">Todos</option></select>
+        </div>
+        <button class="ghost" id="btn-export-noc" type="button">⬇ Exportar a Excel</button>
       </div>
       <div class="card-title" style="margin-top:4px;">Focos que van en el mensaje</div>
       <div id="noc-focos"></div>
       <div class="hint">Marcá los focos (de cerveza y de UNG) que querés trabajar con los vendedores. A cada vendedor le llegan solo sus clientes que <b>no compraron</b> alguno de esos focos en el mes: los que tienen pedido para la fecha y los que tienen entrega y no pidieron. La elección queda guardada en este navegador.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Tienen entrega esa fecha y no cargaron pedido</div>
+      <div class="scroll-x" id="table-noc-sin"></div>
     </div>
     <div class="card" id="wpp-noc"></div>
   </div>
@@ -1566,6 +1575,14 @@ function populateCompradoresFiltros(){
     const fechas = Array.from(new Set(PEDIDOS_ROWS.map(p => dateKeyOf(p.fecha)).filter(Boolean))).sort();
     sel.innerHTML = '<option value="">Elegí una fecha…</option>' + fechas.map(f => `<option value="${f}">${new Date(f+'T00:00:00').toLocaleDateString('es-AR')} (${DIA_LABEL[weekdayKeyFromDate(f)]})</option>`).join('');
     if(fechas.includes(actual)) sel.value = actual;
+    const selV = document.getElementById('noc-vendedor'); if(!selV) return;
+    const actualV = selV.value, vistos = new Map();
+    const sumar = v => { const k = normText(v); if(k && !vistos.has(k)) vistos.set(k, String(v).replace(/\s+/g,' ').trim()); };
+    PEDIDOS_ROWS.forEach(p => sumar(p.vendedor));
+    CLIENTES_ACTIVOS.forEach(c => sumar(c.vendedor));
+    const vends = Array.from(vistos.values()).sort((a,b) => a.localeCompare(b,'es'));
+    selV.innerHTML = '<option value="">Todos</option>' + vends.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(vends.includes(actualV)) selV.value = actualV;
   })();
   COMPRADORES_CFGS.forEach(cfg => {
     const selFecha = document.getElementById(cfg.fechaId);
@@ -1934,9 +1951,74 @@ function renderNocFocos(){
   el.querySelectorAll('.noc-all').forEach(a => a.addEventListener('click', () => cambiar(Array.from(new Set(nocSeleccion().concat(claves(a.dataset.g)))))));
   el.querySelectorAll('.noc-none').forEach(a => a.addEventListener('click', () => { const q = new Set(claves(a.dataset.g)); cambiar(nocSeleccion().filter(k => !q.has(k))); }));
 }
+// Clientes con entrega esa fecha que NO cargaron pedido (todos, con o sin oportunidad), con SÍ/NO de cada foco elegido.
+function nocSinPedidoRows(cfg, fecha, vendedor){
+  const res = computeCompradoresMes(fecha, vendedor, cfg);
+  const flags = cfg.flagsCache || computeClientFlags(cfg);
+  const rows = res.sinPedido.map(sp => {
+    const f = flags.get(sp.codCliente) || {};
+    const faltan = cfg.focos.filter(fo => !f[fo.key]).length;
+    return { ...sp, flags: f, faltan, esVip: CLIENTES_P1P4.has(sp.codCliente) };
+  });
+  rows.sort((a, b) => {
+    if(!a.vendedor !== !b.vendedor) return a.vendedor ? -1 : 1;
+    return a.vendedor.localeCompare(b.vendedor, 'es') || (b.esVip - a.esVip) || (b.faltan - a.faltan) || a.codCliente - b.codCliente;
+  });
+  return { rows, sinVendedorConocido: res.sinVendedorConocido, conPedido: res.conPedido };
+}
+function renderNocSin(cfg){
+  const el = document.getElementById('table-noc-sin');
+  if(!el) return;
+  const fecha = document.getElementById('noc-fecha').value;
+  const vend = document.getElementById('noc-vendedor').value;
+  if(!PEDIDOS_ROWS.length){ el.innerHTML = '<div class="empty-state">Subí la base de pedidos (Paso 3).</div>'; return; }
+  if(!VISITA_MAP.size){ el.innerHTML = '<div class="empty-state">Subí la base de días de entrega (Paso 4).</div>'; return; }
+  if(!fecha){ el.innerHTML = '<div class="empty-state">Elegí una fecha arriba.</div>'; return; }
+  const { rows, sinVendedorConocido } = nocSinPedidoRows(cfg, fecha, vend);
+  if(!rows.length){
+    el.innerHTML = `<div class="empty-state">Todos los clientes${vend ? ' de ' + escapeHtml(vend) : ''} con entrega para ${DIA_LABEL[weekdayKeyFromDate(fecha)]} ya tienen pedido cargado. 🎉</div>`
+      + (sinVendedorConocido ? `<div class="hint">${sinVendedorConocido} cliente(s) con entrega ese día y sin pedido no se pudieron asignar a ningún vendedor.</div>` : '');
+    return;
+  }
+  const conOpp = cfg.focos.length ? rows.filter(r => r.faltan > 0).length : null;
+  let html = `<div class="hint" style="margin-bottom:12px;"><b>${rows.length}</b> cliente(s) con entrega el <b>${DIA_LABEL[weekdayKeyFromDate(fecha)]}</b> sin pedido cargado${vend ? ' · vendedor: <b>' + escapeHtml(vend) + '</b>' : ''}${conOpp !== null ? ` · <b>${conOpp}</b> con oportunidad en los focos elegidos` : ' · elegí focos arriba para ver qué les falta comprar'}.</div>`;
+  html += '<table><thead><tr><th class="mono">Cód. Cliente</th><th>Razón Social</th><th>Vendedor</th><th>Ruta</th>'
+    + cfg.focos.map(fo => `<th style="text-align:center">${escapeHtml(wppFocoLabel(fo))}</th>`).join('')
+    + (cfg.focos.length ? '<th class="mono" style="text-align:center">Faltan</th>' : '') + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += `<tr class="${r.esVip && r.faltan > 0 ? 'flag-vip' : ''}"><td class="mono">${r.codCliente}${r.esVip ? '<span class="tag-p1p4">P1&amp;P4</span>' : ''}</td>`
+      + `<td class="strong">${escapeHtml(r.razonSocial || '(sin razón social en las bases)')}</td>`
+      + `<td>${r.vendedor ? escapeHtml(r.vendedor) : '<span class="badge">sin vendedor identificado</span>'}</td><td>${escapeHtml(r.ruta || '')}</td>`
+      + cfg.focos.map(fo => `<td style="text-align:center">${flagBadge(!!r.flags[fo.key])}</td>`).join('')
+      + (cfg.focos.length ? `<td class="mono ${r.faltan ? 'diff-neg' : 'diff-pos'}" style="text-align:center">${r.faltan}</td>` : '') + '</tr>';
+  });
+  html += '</tbody></table>';
+  if(vend && sinVendedorConocido) html += `<div class="hint">Quedaron afuera ${sinVendedorConocido} cliente(s) que no se pudieron asignar a ningún vendedor.</div>`;
+  el.innerHTML = html;
+}
+function exportNoc(){
+  const fecha = document.getElementById('noc-fecha').value;
+  if(!fecha){ alert('Elegí primero una fecha.'); return; }
+  const vend = document.getElementById('noc-vendedor').value;
+  const cfg = getNocCfg();
+  const { rows, conPedido } = nocSinPedidoRows(cfg, fecha, vend);
+  const yn = v => v ? 'Sí' : 'No';
+  const focoHead = cfg.focos.map(fo => wppFocoLabel(fo));
+  const opp = f => cfg.focos.filter(fo => !f[fo.key]).map(wppFocoLabel).join(' | ');
+  const aoa1 = [['Cód. Cliente', 'Razón Social', 'Vendedor', 'Ruta', 'P1&P4', ...focoHead, 'Faltan', 'Oportunidades'],
+    ...rows.map(r => [r.codCliente, r.razonSocial, r.vendedor, r.ruta, yn(r.esVip), ...cfg.focos.map(fo => yn(r.flags[fo.key])), r.faltan, opp(r.flags)])];
+  const aoa2 = [['Cód. Cliente', 'Razón Social', 'Vendedor', 'P1&P4', ...focoHead, 'Faltan', 'Oportunidades'],
+    ...conPedido.filter(c => !cfg.focos.length || c.faltan > 0).map(c => [c.codCliente, c.cliente, c.vendedor, yn(c.esVip), ...cfg.focos.map(fo => yn(c[fo.key])), c.faltan, opp(c)])];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa1), 'Entrega sin pedido');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa2), 'Con pedido');
+  XLSX.writeFile(wb, `no_compradores_foco_${fecha}_${todayStamp()}.xlsx`);
+}
 function renderNoc(){
+  const cfg = getNocCfg();
   renderNocFocos();
-  renderWppPanel(getNocCfg());
+  renderNocSin(cfg);
+  renderWppPanel(cfg);
 }
 
 /* ============================================================
@@ -2246,7 +2328,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzFafoisU9F3WEaRmcuaA-ViRVQnWqjuvWt9fc2o4F5KHFvoolO2Pc4aT-g8i6cN2XhmQ/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzAPzLlofCxHdENggoTFcTcqH61x7i4quo0QRy4DY9oS6t0a99HIIPKovmMkPcmhChbFg/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -2618,6 +2700,8 @@ document.getElementById('fuera-ruta-fecha').addEventListener('change', renderFue
 document.getElementById('btn-export-fuera-ruta').addEventListener('click', exportFueraDeRutaExcel);
 
 document.getElementById('noc-fecha').addEventListener('change', renderNoc);
+document.getElementById('noc-vendedor').addEventListener('change', renderNoc);
+document.getElementById('btn-export-noc').addEventListener('click', exportNoc);
 COMPRADORES_CFGS.forEach(cfg => {
   document.getElementById(cfg.fechaId).addEventListener('change', () => renderCompradoresTab(cfg));
   document.getElementById(cfg.vendId).addEventListener('change', () => renderCompradoresTab(cfg));
