@@ -2330,7 +2330,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = '';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzW2lij9YABpRRje4tzoOp_mGyS57pp_JxDEMWm9pZaOGixUPNk7UcngPVLiYORrMymtA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
