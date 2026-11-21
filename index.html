@@ -106,7 +106,8 @@
   .warn-box{background:var(--red-soft);border:1px solid rgba(193,91,91,.35);border-radius:8px;padding:11px 13px;font-size:12.5px;margin-top:10px;}
   .clickable-row{cursor:pointer;}
   .clickable-row:hover{background:var(--surface-2);}
-  #admin-bar, #shared-summary{display:none;}
+  #admin-bar, #shared-summary, #auto-card{display:none;}
+  body.role-admin #auto-card{display:block;}
   body.role-admin #admin-bar{display:block;}
   body.role-viewer #shared-summary{display:block;}
   body.role-viewer #steps-wrap{display:none;}
@@ -146,6 +147,16 @@
   <div class="persist-banner" id="persist-banner">💾 Los archivos que cargues se guardan en este navegador y se restauran solos al abrir la página.</div>
 
   <div class="persist-banner" id="admin-bar"><span id="admin-bar-msg"></span> <button class="ghost" id="btn-publish-all" type="button" style="margin-left:8px;display:none;">☁ Publicar todo lo pendiente</button></div>
+
+  <div class="card" id="auto-card">
+    <div class="card-title">Descarga automática de bases</div>
+    <div class="card-sub">Pedí la descarga y el ayudante de tu PC la hace en Chess y en la web. Las bases 2, 3 y 5 se usan todo el día; la 4 y la 6 cambian poco.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="primary" id="btn-auto-a" type="button">⚡ Descargar bases 2, 3 y 5</button>
+      <button class="ghost" id="btn-auto-b" type="button">Descargar bases 4 y 6</button>
+    </div>
+    <div class="status-line" id="auto-status"></div>
+  </div>
 
   <div class="card" id="shared-summary">
     <div class="card-title">Datos publicados</div>
@@ -2330,7 +2341,7 @@ async function restoreAll(){
    Sin claves ni contraseñas: el link ES el control de acceso.
      ...#admin  → administrador: ve los pasos de carga y publica
      (sin eso)  → solo lee, los pasos de carga no aparecen                                            */
-let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzW2lij9YABpRRje4tzoOp_mGyS57pp_JxDEMWm9pZaOGixUPNk7UcngPVLiYORrMymtA/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
+let SHARED_API_URL = 'https://script.google.com/macros/s/AKfycbzvRfjHaV5KbEBfnzCce6mQCRo0U5dA9L24jfNr97kaRK6eJB8TAm1DctHXhRIQ42kkVw/exec';   // ← pegar acá la URL /exec de Apps Script. Vacío = modo local
 let SHARED_ROLE = 'local'; // 'local' | 'admin' | 'viewer'
 let SHARED_META = {};      // key -> {uploadId, parts, savedAt, enc, bytes} de lo publicado
 let SHARED_POLL = null;
@@ -2754,6 +2765,48 @@ window.addEventListener('hashchange', () => {
 });
 bootstrap();
 
+
+/* ============================================================
+   DESCARGA AUTOMÁTICA (pedido a la cola de Apps Script)
+   ============================================================ */
+(function(){
+  const NAMES = {2:'2 Base de Ventas',3:'3 Base de pedidos',4:'4 Días de entrega BEES ONE',5:'5 Acumulado del mes',6:'6 Clientes activos'};
+  let timer = null;
+  function el(id){ return document.getElementById(id); }
+  function say(t, cls){ const s = el('auto-status'); if(s){ s.textContent = t; s.className = 'status-line'; s.style.color = cls === 'err' ? '#c0392b' : (cls === 'ok' ? '#1e8449' : ''); } }
+  function setBusy(b){ ['btn-auto-a','btn-auto-b'].forEach(id => { const x = el(id); if(x) x.disabled = b; }); }
+  function render(job){
+    if(!job){ say(''); setBusy(false); return false; }
+    const lista = job.bases.map(n => (job.done.indexOf(n) >= 0 ? '✔ ' : '· ') + NAMES[n]).join('   ');
+    const age = Math.round((Date.now() - job.updatedAt) / 60000);
+    if(job.status === 'listo'){ say('✔ Listo. ' + lista + '  (' + (job.msg || '') + ')', 'ok'); setBusy(false); return false; }
+    if(job.status === 'error'){ say('✖ Error: ' + (job.msg || 'sin detalle') + '   ' + lista, 'err'); setBusy(false); return false; }
+    if(age >= 30){ say('El pedido quedó sin respuesta hace ' + age + ' min: ¿está prendido el ayudante de la PC y Chess abierto?', 'err'); setBusy(false); return false; }
+    say((job.status === 'pendiente' ? '⏳ ' : '⬇ ') + job.msg + '   ' + lista); setBusy(true); return true;
+  }
+  async function poll(){
+    try{
+      const r = await sharedApi({action:'jobStatus'});
+      if(r && r.ok && render(r.job)){ timer = setTimeout(poll, 4000); } else { timer = null; }
+    }catch(e){ say('No se pudo consultar el estado: ' + e.message, 'err'); timer = null; }
+  }
+  async function pedir(group){
+    if(!sharedActive()){ say('Falta pegar la URL /exec de Apps Script en la página (modo compartido).', 'err'); return; }
+    setBusy(true); say('Enviando pedido…');
+    try{
+      const r = await sharedApi({action:'jobRequest', group});
+      if(!r || !r.ok) throw new Error((r && r.error) || 'respuesta inválida');
+      render(r.job);
+      if(!timer) timer = setTimeout(poll, 4000);
+    }catch(e){ say('No se pudo enviar el pedido: ' + e.message, 'err'); setBusy(false); }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const a = el('btn-auto-a'), b = el('btn-auto-b');
+    if(a) a.addEventListener('click', () => pedir('A'));
+    if(b) b.addEventListener('click', () => pedir('B'));
+    if(sharedActive() && !timer) setTimeout(poll, 1500); // si hay un pedido en curso, retoma el seguimiento
+  });
+})();
 </script>
 </body>
 </html>
