@@ -151,7 +151,17 @@
   <div class="card" id="auto-card">
     <div class="card-title">Descarga automática de bases <span style="display:inline-block;margin-left:8px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(220,60,60,.12);color:#c0392b;vertical-align:middle;">🔒 Solo Ivo</span></div>
     <div class="card-sub">Solo Ivo puede pedir la descarga (se ve únicamente con el link de administrador). El ayudante de su PC la hace en Chess y en la web. Las bases 2, 3 y 5 se usan todo el día; la 4 y la 6 cambian poco.</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div class="card-sub" style="margin-top:6px;"><b>Para hacerlo andar:</b> en la carpeta CONTROL DE PEDIDOS hay un archivo .ahk: hacele click derecho y <b>"Run with UI Access"</b>. Abrí el Chess de escritorio e iniciá sesión. Además, abrí BEES One y Chess web e iniciá sesión. Ahora sí, no habría problema con los botones.</div>
+    <div class="card-sub" style="margin-top:6px;"><b>Antes de tocar un botón, fijate que:</b>
+      <ul style="margin:4px 0 0 18px;padding:0;">
+        <li>Chrome esté <b>abierto y maximizado</b>, con BEES One y Chess web ya logueados (el ayudante abre pestañas nuevas ahí).</li>
+        <li>Chess de escritorio esté abierto, <b>en la pantalla principal</b> (con los favoritos visibles) y sin ventanas encima, ni siquiera el Administrador de tareas.</li>
+        <li>No haya cuadros "Guardar como", Excel o ventanas de reportes abiertos de una descarga anterior.</li>
+        <li>La pantalla esté en <b>1920×1080 con escala 100%</b> (los clics están medidos para esa).</li>
+        <li><b>No toques el mouse ni el teclado</b> mientras trabaja: maneja los dos. Con Ctrl+Alt+P lo pausás y con Ctrl+Alt+Q lo cerrás.</li>
+        <li>Lo ideal es dejarlo trabajar a solas: la 2, 3 y 5 tardan unos minutos, y la 4 puede tardar más porque BEES One tarda en preparar la base.</li>
+      </ul></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
       <button class="primary" id="btn-auto-a" type="button">🔒 Descargar bases 2, 3 y 5</button>
       <button class="ghost" id="btn-auto-b" type="button">🔒 Descargar bases 4 y 6</button>
     </div>
