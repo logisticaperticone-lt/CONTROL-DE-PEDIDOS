@@ -131,48 +131,22 @@
   .dup-side{display:inline-block;min-width:220px;font-size:12.5px;color:var(--text-dim);vertical-align:top;margin-right:18px;}
   .dup-side b{color:var(--text);}
 
-  /* ===== Paleta del planificador: cabecera grafito con detalle naranja, contenido claro ===== */
-  :root{
-    --bg:#f3f4f6; --surface:#ffffff; --surface-2:#f7f8fa; --border:#e3e6eb;
-    --text:#1f2328; --text-dim:#3d4450; --text-faint:#667085;
-    --copper:#f07f1d; --copper-soft:rgba(240,127,29,.12);
-    --green:#1e9e5a; --green-soft:#dff3e8; --red:#d64545; --red-soft:#fbe1e1;
-  }
-  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;}
-  h1,h2,h3,.section-title,.kpi .num{font-family:'Segoe UI',system-ui,sans-serif;}
-  .topbar{background:linear-gradient(90deg,#0d0f12 0%,#1a1d22 100%);border-bottom:3px solid var(--copper);color:#fff;flex-wrap:wrap;}
-  .topbar h1{color:#fff;font-size:17px;}
-  .topbar .sub{color:#c2c7cf;}
+  /* ===== Pestañas CONTROL / ADMIN (tema oscuro original) ===== */
+  .topbar{flex-wrap:wrap;}
   .vista-nav{margin-left:auto;display:flex;gap:6px;}
-  .nav-phase-btn{font-weight:700;font-size:13px;border-radius:6px;padding:7px 14px;border:none;cursor:pointer;background:transparent;color:#d5d8de;}
-  .nav-phase-btn:hover{background:#3a3f48;}
-  .nav-phase-btn.active{background:#3a3f48;color:#fff;box-shadow:inset 0 -3px 0 var(--copper);}
+  .nav-phase-btn{font-weight:700;font-size:13px;border-radius:6px;padding:7px 14px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text-dim);}
+  .nav-phase-btn:hover{color:var(--text);border-color:var(--copper);}
+  .nav-phase-btn.active{background:var(--copper-soft);color:var(--copper);border-color:var(--copper);}
   body.role-viewer #nav-admin{display:none;}
   .vista{display:none;}
   .vista.activa{display:block;}
-  .admin-head{background:#fff7ee;border:1px solid #f6d6b3;border-left:4px solid var(--copper);border-radius:8px;padding:9px 13px;font-size:12.5px;color:#7a4a12;margin-bottom:14px;font-weight:600;}
-  .card{box-shadow:0 1px 2px rgba(16,24,40,.04);}
-  .card-title{color:#3d4450;}
-  button.primary{background:#2b2f36;color:#fff;}
-  button.primary:hover{background:#3a3f48;}
-  button.primary:disabled{background:#c9ccd2;color:#fff;}
-  button.ghost{background:#fff;color:#3d4450;border-color:#d5d9e0;}
-  button.ghost:hover{border-color:var(--copper);color:#1f2328;}
-  th{background:#eef0f3;color:#3d4450;}
-  .scroll-x th{background:#2b2f36;color:#fff;box-shadow:inset 0 -2px 0 var(--copper);}
-  .scroll-x th:hover{color:#ffd9b0;}
-  td{color:#3d4450;}
-  tr.perfora{background:#fdf0f0;}
-  .tabs{border-bottom:2px solid var(--border);}
-  .tab-btn{color:#667085;}
-  .tab-btn:hover{color:#1f2328;}
-  .tab-btn.active{color:#c96a10;border-bottom-color:var(--copper);}
-  .badge{background:#eef0f3;color:#3d4450;border-color:#d5d9e0;}
-  .kpi{border-left:3px solid var(--copper);}
-  input[type=text],input[type=search],select,textarea.paste-area{background:#fff;color:#1f2328;border-color:#d5d9e0;}
-  .tag-p1p4{background:#7c3aed;}
-  .flag-vip{background:rgba(124,58,237,.08);}
-  .persist-banner{background:#fff;}
+  .admin-head{background:var(--copper-soft);border:1px solid var(--border);border-left:4px solid var(--copper);border-radius:8px;padding:9px 13px;font-size:12.5px;color:var(--copper);margin-bottom:14px;font-weight:600;}
+  /* tabla "Bases actualizadas" */
+  .bases-tabla{width:100%;border-collapse:collapse;font-size:13px;}
+  .bases-tabla th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);background:transparent;position:static;}
+  .bases-tabla td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-dim);}
+  .bases-tabla td b{color:var(--text);}
+  .sem-dot{display:inline-block;width:13px;height:13px;border-radius:50%;}
 </style>
 </head>
 <body>
@@ -2630,20 +2604,61 @@ function fechaHora24(t){
   const p = n => String(n).padStart(2, '0');
   return `${dia} ${p(d.getDate())}-${p(d.getMonth() + 1)}, ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+// Semáforo de cada base contra los HORARIOS en que la PC de Ivo tiene que publicarla:
+// verde = tiene la última publicación que tocaba · amarillo = se saltó una · rojo = se saltó dos o más.
+const BASES_HORARIOS = (() => {
+  const lv = ['08:20','09:20','10:20','11:20','12:20','13:20','14:20'], sab = ['08:20','09:20','10:20','11:20','12:20'];
+  const semana = (a, b) => Object.assign({}, ...[1,2,3,4,5].map(d => ({[d]: a})), {6: b});
+  return { sales: semana(lv, sab), pedidos: semana(lv, sab), mensual: semana(['08:20','09:20','14:20'], ['08:20','09:20']) };
+})();
+const BASES_MARGEN_MIN = { sales: 20, pedidos: 20, mensual: 25 };
+function basesTurnos(k, ahora, adelante){
+  const out = [];
+  for(let d = adelante ? 0 : -8; d <= (adelante ? 8 : 0); d++){
+    const dia = new Date(ahora); dia.setDate(ahora.getDate() + d);
+    ((BASES_HORARIOS[k] || {})[dia.getDay()] || []).forEach(h => { const t = new Date(dia); const [hh, mm] = h.split(':').map(Number); t.setHours(hh, mm, 0, 0); out.push(t); });
+  }
+  return out.sort((a, b) => a - b);
+}
+function basesSemaforo(k, m){
+  if(!m) return 'rojo';
+  const ahora = new Date(), margen = (BASES_MARGEN_MIN[k] || 20) * 60000, tol = 10 * 60000;
+  const venc = basesTurnos(k, ahora, false).filter(t => t.getTime() + margen <= ahora.getTime()).reverse();
+  if(!venc.length || m.savedAt >= venc[0].getTime() - tol) return 'verde';
+  if(venc[1] && m.savedAt >= venc[1].getTime() - tol) return 'amarillo';
+  return 'rojo';
+}
+function basesProxima(k){
+  const ahora = new Date(), t = basesTurnos(k, ahora, true).find(x => x > ahora);
+  if(!t) return '—';
+  const p = n => String(n).padStart(2, '0');
+  const hoy = t.toDateString() === ahora.toDateString();
+  return (hoy ? 'hoy' : t.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '')) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
+}
+function basesHace(t){
+  const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if(min < 60) return 'hace ' + min + ' min';
+  const h = Math.floor(min / 60);
+  return h < 48 ? 'hace ' + h + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '') : 'hace ' + Math.round(h / 24) + ' días';
+}
 function renderBasesStatus(){
   const card = document.getElementById('bases-status-card'), el = document.getElementById('bases-status');
   if(!card || !el) return;
   card.style.display = '';
+  const color = { verde: '#3FB27F', amarillo: '#E0B23F', rojo: '#E0604F' };
   const items = [['sales', '2. Base de ventas'], ['pedidos', '3. Base de pedidos'], ['mensual', '5. Acumulado del mes']];
-  el.innerHTML = items.map(([k, nombre]) => {
-    const m = SHARED_META[k];
-    if(!m) return `<b>${nombre}:</b> <span style="color:#888;">todavía no se subió nada</span>`;
-    const limiteH = k === 'mensual' ? 7 : 3;   // el acumulado se publica a la mañana y a las 14:00
-    const viejo = (Date.now() - m.savedAt) > limiteH * 3600 * 1000;
-    return `<b>${nombre}:</b> subido ${fechaHora24(m.savedAt)} · ${summaryDetail(k)} ` +
-      (viejo ? '<span style="color:#c0392b;">⚠ hace más de ' + limiteH + ' horas</span>' : '<span style="color:#1e8449;">✔ cargado</span>');
-  }).join('<br>');
+  const filas = items.map(([k, nombre]) => {
+    const m = SHARED_META[k], sem = basesSemaforo(k, m);
+    const dot = `<span class="sem-dot" style="background:${color[sem]};box-shadow:0 0 0 3px ${color[sem]}33;" title="${sem}"></span>`;
+    if(!m) return `<tr><td>${dot}</td><td><b>${nombre}</b></td><td colspan="2" style="color:var(--text-faint)">todavía no se subió nada</td><td>${basesProxima(k)}</td></tr>`;
+    return `<tr><td>${dot}</td><td><b>${nombre}</b></td><td style="white-space:nowrap">${fechaHora24(m.savedAt)}<br><span style="color:var(--text-faint);font-size:12px">${basesHace(m.savedAt)}</span></td>`
+      + `<td>${summaryDetail(k)}</td><td style="white-space:nowrap">${basesProxima(k)}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table class="bases-tabla"><thead><tr><th></th><th>Base</th><th>Subida</th><th>Qué trae</th><th>Próxima</th></tr></thead><tbody>${filas}</tbody></table>`
+    + `<div style="margin-top:8px;font-size:12px;color:var(--text-faint)"><span style="color:${color.verde}">●</span> al día (tiene la última subida que tocaba) · `
+    + `<span style="color:${color.amarillo}">●</span> se saltó una subida · <span style="color:${color.rojo}">●</span> se saltó dos o más: revisar la PC de Ivo</div>`;
 }
+setInterval(() => { try { if(typeof SHARED_META !== 'undefined' && Object.keys(SHARED_META).length) renderBasesStatus(); } catch(e){} }, 60000);
 function renderSharedSummary(){
   const el = document.getElementById('shared-summary-body');
   if(!el) return;
